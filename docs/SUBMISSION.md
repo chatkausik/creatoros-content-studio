@@ -2,7 +2,9 @@
 
 The challenge's source requirements are in [requirement.md](../requirement.md). The public repository is [chatkausik/creatoros-content-studio](https://github.com/chatkausik/creatoros-content-studio). Both required Actions secret names are configured, and the project's build/regression workflow has passed.
 
-**Registration blocker:** the organizer rejected the supplied `SUBMISSION_TOKEN` with HTTP 404, `token_unknown`: “This SUBMISSION_TOKEN does not match any registration.” Replace it with the token from the Agent Arena 2026 registration, update that repository secret, and rerun the organizer workflow. [Failed organizer run](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38503305549). Eligibility is not claimed while this remains unresolved.
+**CI status:** the registration token was corrected from the authenticated Agent Arena dashboard. [Organizer attempt 2](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38504352208/attempts/2) passes all four critical checks and all three advisory checks. Result recording remains blocked with HTTP 403 because submissions open **October 14, 2026 at 11:30 PM Eastern (October 15 at 03:30 UTC)**. The organizer has not yet recorded an eligible result.
+
+The separate [opening retry workflow](../.github/workflows/agent-arena-opening-retry.yml) schedules a rerun at 03:43 UTC on October 15, with 04:43 and 05:43 UTC fallbacks. GitHub may delay scheduled jobs. It selects the official push run for the current `main` commit, waits for its actual result, and disables itself only after success (or after the submission window closes). It requires no Mesh or submission secrets. The organizer workflow remains byte-for-byte unchanged. A manual run before opening only reports that it is waiting; it does not establish eligibility.
 
 The final live report scores all eight pairs after artifact recovery, preserves the original four first-attempt failures, and passes both actual-opening ablations. Read the [qualitative review](../evals/REVIEW.md) alongside the numbers.
 
@@ -28,7 +30,7 @@ The final live report scores all eight pairs after artifact recovery, preserves 
 
 ## Publish the submission package
 
-1. Create the intended **public GitHub repository**, attach it as `origin`, and verify that the repository is publicly readable. This document does not claim publication has happened.
+1. The **public GitHub repository** is published and attached as `origin`: [chatkausik/creatoros-content-studio](https://github.com/chatkausik/creatoros-content-studio).
 2. Add repository Actions secrets named exactly `MESH_API_KEY` and `SUBMISSION_TOKEN`. Enter them in GitHub's secret form or an interactive secret command; do not put values in source or command history. [GitHub secret documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
 3. Push the reviewed submission commit. Preserve `.github/workflows/agent-arena-2026-checks.yml` unchanged, including its OIDC permissions and audience.
 4. Verify the **Agent Arena Checks** run and **CreatorOS Tests** run for that exact commit, then verify the matching commit appears on the challenge dashboard.

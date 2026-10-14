@@ -1,0 +1,83 @@
+name: Retry Agent Arena after submissions open
+
+on:
+  workflow_dispatch:
+  schedule:
+    # October 14, 11:43 PM Eastern, with two fallback attempts on October 15.
+    # GitHub schedules use UTC and can be delayed. The script enforces 2026.
+    - cron: '43 3,4,5 15 10 *'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: agent-arena-opening-retry
+  cancel-in-progress: false
+
+jobs:
+  retry-official-checks:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Retry the unchanged organizer workflow within its submission window
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const repo = context.repo;
+            const helper = 'agent-arena-opening-retry.yml';
+            const opens = Date.parse('2026-10-15T03:30:00Z');
+            const closes = Date.parse('2026-10-20T17:30:00Z');
+            const now = Date.now();
+            const report = async (message) => {
+              core.info(message);
+              await core.summary.addRaw(message).write();
+            };
+            const disableHelper = () => github.rest.actions.disableWorkflow({
+              ...repo, workflow_id: helper
+            });
+            if (now < opens) {
+              await report('Waiting: submissions open October 14, 2026 at 11:30 PM Eastern. No official check was rerun and no result was recorded.');
+              return;
+            }
+            if (now >= closes) {
+              await report('Submission window closed. No check was rerun; disabling this temporary retry workflow.');
+              await disableHelper();
+              return;
+            }
+            const { data: branch } = await github.rest.repos.getBranch({ ...repo, branch: 'main' });
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...repo, workflow_id: 'agent-arena-2026-checks.yml',
+              branch: 'main', event: 'push', head_sha: branch.commit.sha, per_page: 1
+            });
+            let run = data.workflow_runs[0];
+            if (!run) throw new Error('No official push run found for the current main commit. Push that commit and inspect Agent Arena Checks.');
+            if (run.head_sha !== branch.commit.sha) throw new Error('The official run does not match current main; refusing to rerun a stale commit.');
+            await report(`Official check for ${branch.commit.sha}: ${run.html_url}`);
+            if (run.status !== 'completed') {
+              await report('The official check is already active; leaving it running. A later scheduled attempt can inspect its result.');
+              return;
+            }
+            if (run.conclusion !== 'success') {
+              const previousAttempt = run.run_attempt;
+              await github.rest.actions.reRunWorkflow({ ...repo, run_id: run.id });
+              // A rerun preserves the official push event, commit and OIDC identity.
+              // Observe a NEW completed attempt before claiming success.
+              let completed = false;
+              for (let attempt = 0; attempt < 24; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 10000));
+                ({ data: run } = await github.rest.actions.getWorkflowRun({ ...repo, run_id: run.id }));
+                if (run.run_attempt > previousAttempt && run.status === 'completed') {
+                  completed = true;
+                  break;
+                }
+              }
+              if (!completed) throw new Error(`Official rerun is still pending. Inspect ${run.html_url}; the fallback schedule remains enabled.`);
+              if (run.conclusion !== 'success') throw new Error(`Official check remains ${run.conclusion}. Inspect ${run.html_url}; no result is being treated as a pass.`);
+            }
+            // Do not retire the helper if a newer commit arrived during the rerun.
+            const { data: current } = await github.rest.repos.getBranch({ ...repo, branch: 'main' });
+            if (current.commit.sha !== run.head_sha) throw new Error('Main changed during the retry. The next scheduled attempt will inspect the new commit.');
+            await report(`Agent Arena Checks succeeded for ${run.head_sha}. Disabling only this temporary retry workflow.`);
+            await disableHelper();
