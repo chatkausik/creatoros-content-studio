@@ -2,17 +2,35 @@
 
 **A content studio that shows why the next post changed.**
 
-CreatorOS helps technical creators turn a brief into an edited LinkedIn post or a developed newsletter, create a matching visual, queue it for publication, record engagement, and use that evidence to choose the next opening. The creator's voice stays anchored to multiple writing samples. Drafts, critiques, revisions, image versions, and learning decisions remain inspectable.
+[Demo](docs/demo.mp4) · [Evaluation](evals/fresh-recovered/RESULTS.md) · [Design](docs/DESIGN.md) · [Challenge requirements](requirement.md) · [Project CI](https://github.com/chatkausik/creatoros-content-studio/actions/workflows/tests.yml)
 
-This is a local, single-user application built with FastAPI, React, SQLite, and LangGraph. Every live AI request—including brand extraction, editorial evaluation, and image generation—uses the mandatory [Mesh gateway](https://developers.meshapi.ai/). Demo content and synthetic engagement are visibly labeled.
+CreatorOS turns a brief into an edited LinkedIn post or newsletter, generates a matching visual, queues the approved piece, and uses recorded performance to guide the next opening. Its defining interaction is inspectable: **previous opening → feedback evidence → strategy decision → next opening**. Multiple writing samples anchor the creator's voice throughout the process.
+
+FastAPI, React, SQLite, and LangGraph power a local, single-user application. Every live AI call—voice extraction, writing, editing, visual generation, and evaluation—routes through the mandatory [Mesh gateway](https://developers.meshapi.ai/). Demo output and simulated engagement are labeled separately.
 
 ![CreatorOS Studio with draft comparison and learning evidence](docs/screenshots/studio.png)
 
-[Watch the 90-second walkthrough](docs/demo.mp4). It uses actual application screenshots and labeled fixtures. It is not a real-time generation recording. Live Mesh outputs and measured checks are recorded separately in the evaluation reports.
+The [90-second walkthrough](docs/demo.mp4) uses actual application screenshots and fictional demonstration records. It is a captioned screenshot sequence, not a real-time generation recording. [Live Mesh outputs and generated images](evals/UPGRADE_VALIDATION.md) are documented separately.
 
-## Quick start
+## What works today
 
-Prerequisites: Python 3.11 or newer, Node.js 22 or newer, and a Mesh key for live AI generation. Fixture demos and deterministic checks work without paid AI calls.
+| Capability | What you can inspect |
+|---|---|
+| Four cooperating agents | Strategist, writer, editor, and visual agent have distinct prompts and named LangGraph steps |
+| Editorial refinement | Original text, concrete edit requests, revisions, and review history |
+| Learned voice | A versioned profile extracted from multiple writing samples, with supporting quotes |
+| Human control | Saved manual edits, rechecks, stale-review indicators, and explicit acknowledgement of unresolved concerns |
+| Visual iteration | Matching images, regeneration feedback, retained variants, and renewed approval after changes |
+| Two content formats | LinkedIn posts and developed newsletters, with copy and export controls |
+| Persistent queue | Approved posts become ready when due; publication and confirmation are manual |
+| Evidence-based adaptation | Comparable observations, frozen learning snapshots, continued exploration, and actual subsequent openings |
+| Recoverable execution | Saved step artifacts, frozen run settings, failure diagnostics, and compatible retries |
+
+The scheduler does not publish to LinkedIn or send email. Platform analytics are entered manually. Authentication, multi-user isolation, and production hosting are outside this release.
+
+## Run locally
+
+Prerequisites: **Python 3.11+** and **Node.js 22+**. Run these commands from the repository root. A Mesh key is needed only for live AI actions.
 
 ```sh
 python3 -m venv .venv
@@ -20,13 +38,12 @@ python3 -m venv .venv
 cp .env.example .env
 npm --prefix frontend ci
 npm --prefix frontend run build
-.venv/bin/python -m uvicorn backend.creatoros.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000**. Enter your Mesh key in the local `.env` before running live generation. Never paste it into a brief, commit it, or put it in frontend configuration.
+Before starting the backend, edit `.env`. For a free fixture demo, leave `MESH_API_KEY` empty and keep `CREATOROS_SEED_DEMO=true`. For live generation, supply your own key:
 
 ```dotenv
-MESH_API_KEY=rsk_your_key_here
+MESH_API_KEY=
 MESH_BASE_URL=https://api.meshapi.ai/v1
 MESH_CHAT_MODEL=openai/gpt-4o-mini
 MESH_IMAGE_MODEL=openai/gpt-image-1-mini
@@ -34,148 +51,152 @@ CREATOROS_DATA_DIR=./data
 CREATOROS_SEED_DEMO=true
 ```
 
-Model availability and credit balance depend on the connected Mesh account. If a live request fails, the application preserves the error and completed work; synthetic output is never silently substituted for a failed paid call. The backend rejects an AI base URL outside Mesh.
+```sh
+.venv/bin/python -m uvicorn backend.creatoros.main:app --host 127.0.0.1 --port 8000
+```
 
-The composer offers **Configured model**, **Budget** (`openai/gpt-4o-mini`), and **Submission-tested** (`openai/gpt-5.1`) choices. New runs freeze selected models, generation settings, platform, prompt hashes and output-schema hashes. Resume uses those settings; incompatible captured prompts or schemas stop before another paid call. Older runs disclose uncaptured schema coverage. A run cannot resume over later human edits, reviews, visual choices or publishing decisions. Preset selection is explicit because different models have different costs and behavior.
+Open **http://127.0.0.1:8000**. Select **Demo fixture** in the generation/profile controls for actions without paid calls; live mode can be selected automatically when a key is configured. Demo text, reviews, and SVG visuals exercise the workflow without measuring AI quality. Restart the backend after changing `.env`.
 
-For frontend development, run the backend command above and `npm --prefix frontend run dev` in another terminal. Open **http://127.0.0.1:5173**; Vite proxies API and asset requests to the backend. The production backend serves the built frontend from `frontend/dist`.
+Live generation offers **Configured model**, **Budget** (`openai/gpt-4o-mini`), and **Submission-tested** (`openai/gpt-5.1`) presets. “Submission-tested” identifies the model used in the recorded evaluation; it is not a quality guarantee. Model access and credits depend on your Mesh account. A failed live call preserves its error and completed work rather than substituting a fixture. The backend rejects an AI base URL outside Mesh.
 
-## What to try
+Keep keys server-side in the ignored `.env`, and keep the service bound to `127.0.0.1`. The app has no authentication. For frontend development, leave the backend running and use `npm --prefix frontend run dev`; open **http://127.0.0.1:5173**. Vite proxies API and asset requests to the backend.
 
-1. **Brand:** inspect the two labeled demonstration brands, or create a brand and provide at least three distinct writing samples. Extract a profile that cites those samples.
-2. **Studio:** choose LinkedIn or newsletter, enter a brief, follow agent progress, and compare the original draft with the revision. Inspect all editor reviews and outstanding requests. Edit a passage and ask the editor to recheck the current version; an old review is marked stale after a human edit.
-3. **Visual and queue:** create a visual, regenerate with feedback, or select a saved version. Explicit regeneration may spend Mesh credits; retrying a saved download preserves its request and model configuration. Approve the finished post and schedule it. When due, publish manually and confirm it in the studio.
-4. **Learning:** record comparable metrics and the time they were measured. Recompute the learning snapshot, inspect its frozen observations, and generate another post. The learning chain connects actual previous and subsequent openings with the evidence and policy that changed them.
+For an empty workspace, set `CREATOROS_SEED_DEMO=false` and choose a new `CREATOROS_DATA_DIR` before starting. Disabling seeding does not delete existing data.
 
-LinkedIn output stays within 3,000 characters. Newsletter output has a subject and a 400–700-word body with developed sections, an example, and an exercise. Both have copy/export controls. Newsletter adaptation does not imply an email-service integration or automated sending.
+## Try the complete loop
 
-The seeded Ada and Milo brands, their posts, and their engagement are authored demonstrations. The working local installation also contains **eight authentic, source-attributed LinkedIn posts** from the creator's profile, with a voice profile extracted through Mesh. Those samples and the local database remain under ignored `data/`; they are not distributed with the repository.
+1. **Choose a voice.** Inspect the fictional Ada and Milo workspaces, or create a brand with at least three distinct writing samples. Live extraction creates a profile grounded in those samples.
+2. **Create and refine.** Choose LinkedIn or newsletter, enter a brief, follow agent progress, and compare the draft with its revision. Make a manual edit and request a fresh review; previous reviews remain in history.
+3. **Choose the visual.** Generate an image, provide regeneration feedback, or select a saved variant. Live regeneration is a new paid action. Retry of a saved failed request retains its request configuration and can reuse completed provider work.
+4. **Approve and queue.** Resolve or explicitly acknowledge outstanding concerns, then schedule the post. When it is ready, publish it yourself and confirm publication in the app. The scheduler runs while the backend is running and checks overdue items after restart.
+5. **Close the loop.** Enter engagement with its measurement time and observation window. Recompute learning, inspect the exact observations behind the snapshot, and generate another post to see the chosen opening in actual prose.
 
-The authenticated LinkedIn capture includes visible cumulative impressions and engagement where displayed. Its observation windows are unspecified, so these counts are retained as reference observations and **are not entered as 24-hour or 7-day feedback**. Public fixtures and authentic creator data remain distinguishable. A fresh checkout starts with the labeled demonstration brands; import your own samples through Brand or [the sample-import CLI](scripts/import_samples.py).
+Generated LinkedIn drafts are validated as plain text up to **3,000 characters**. Generated newsletters require a subject, **400–700 words**, and at least three section headings; prompts also request a worked example, exercise, and trade-offs. Those semantic elements still need editorial review. Manual edits save a new version and make earlier checks stale; approval is a creator decision, not a guarantee that every brief constraint passed.
+
+A fresh checkout contains only labeled demonstration data. The creator's working installation additionally has eight authentic, source-attributed LinkedIn samples, held privately under ignored `data/`. They are not bundled with the repo. Import your own samples through Brand or the [sample-import CLI](scripts/import_samples.py). Previously captured cumulative LinkedIn counts have unspecified windows and remain reference observations, excluded from 24-hour and 7-day learning cohorts.
 
 ## How the agents cooperate
 
 ```mermaid
 flowchart LR
-    B[Brief + versioned voice + learning snapshot] --> S[Strategist]
+    B[Brief + frozen voice + learning snapshot] --> S[Strategist]
     S --> W[Writer]
     W --> E[Editor]
-    E -->|Concrete requests, bounded loop| W
+    E -->|Concrete requests, bounded revisions| W
     E --> V[Visual agent]
     V --> A[Human approval]
-    A --> Q[Persistent scheduled queue]
-    Q --> P[Manual publishing]
+    A --> Q[Persistent queue]
+    Q --> P[Manual publication]
     P --> F[Performance observation]
-    F --> L[Versioned hook policy]
+    F --> L[Versioned opening policy]
     L --> B
 ```
 
-| Agent | Distinct responsibility | Inspectable output |
-|---|---|---|
-| Strategist | Choose audience, angle, outline, and an opening consistent with the frozen policy | Strategy, selected hook, supporting feedback |
-| Writer | Draft using the brief and learned voice; address editor requests | Preserved draft and revision versions |
-| Editor | Review brief fulfillment, specificity, clarity, voice, and unsupported claims | Concrete requests and review results |
-| Visual | Translate the final draft into a matching image brief | Image prompt and local generated asset |
+The strategist selects the audience, angle, and outline within the frozen opening policy. The writer applies the brief and learned voice. The editor critiques brief fulfillment, specificity, clarity, voice, and unsupported claims. The visual agent translates the finished text into an image brief and generated asset. LangGraph coordinates the steps; bounded revisions limit repeated work and leave unresolved issues visible.
 
-LangGraph coordinates named steps and persistent checkpoints. The application preserves completed step artifacts so a page refresh or ordinary retry does not regenerate finished work. A bounded editorial loop prevents runaway spending; unresolved issues remain visible for human review.
+New runs freeze models, generation settings, platform, prompt hashes, and output-schema hashes. Resume rejects incompatible captured configuration before another paid call. Older manifests disclose uncaptured schema coverage. Human edits, reviews, and image choices are preserved, and an old run cannot resume over later creator decisions. Request caching reduces duplicate work but cannot guarantee exactly-once billing after every possible process crash.
 
-Voice profiles and learning snapshots are separate. A run freezes the versions it uses, allowing the content strategy to adapt without silently replacing a creator's voice. Decision events record concise explanations and linked evidence rather than hidden model reasoning. Read [the design note](docs/DESIGN.md) for the data flow and tradeoffs.
+Voice profiles and learning policies are versioned separately. Decision events store concise reasons and linked evidence. SQLite holds brands, posts, versions, observations, snapshots, and events under `CREATOROS_DATA_DIR`; generated images are local assets there. API documentation is available at **http://127.0.0.1:8000/docs**. See [design decisions](docs/DESIGN.md) for recovery and state-transition details.
 
 ## What “learning” means
 
-CreatorOS learns one narrow, inspectable preference: **problem-first**, **outcome-first**, or **question-first** openings.
+CreatorOS adapts one narrow preference: **problem-first**, **outcome-first**, or **question-first** openings.
 
 ```text
 meaningful interactions per 1,000 impressions
     = 1,000 × (comments + reposts) / impressions
 ```
 
-Counts are pooled by hook within the same brand, platform, provenance, and observation window. Missing or zero impressions are excluded. Each opening needs **at least three published posts and 300 total impressions**. A preference is used only when the leading opening's descriptive 90% post-level bootstrap range is above the others; ties and overlapping ranges keep the policy exploring. These thresholds are conservative product heuristics, not a guarantee of statistical significance. Every fourth usable or reserved draft explores an alternative; failed generation attempts do not advance the cadence.
+Observations are grouped by brand, platform, provenance, and measurement window. Each opening needs **at least three published posts and 300 total impressions**. A preference is used only when the leader's descriptive 90% post-level bootstrap range sits above the other ranges. Insufficient evidence, ties, and overlapping ranges leave the policy collecting or exploring. Every fourth usable or reserved draft explores an alternative; failed attempts do not advance the cadence.
 
-Every learning update freezes the actual observations, source metadata, post openings, counts, and rates. Corrections append immutable feedback revisions while updating the active observation, so a correction does not inflate the sample count or rewrite older evidence. Legacy snapshots without preserved observations are labeled as aggregate-only rather than reconstructed from changed records.
+Snapshots freeze the actual observations, counts, rates, source metadata, and post openings. Feedback corrections append immutable revisions without counting the same observation twice. Historical evidence is not rewritten when new metrics arrive; legacy aggregate-only snapshots disclose their missing detail.
 
-For manually entered feedback, record `observed_at`. A 24-hour observation must be captured within one hour of its nominal window end; a 7-day observation has a six-hour tolerance. A later analytics report can declare an explicit start/end interval matching publication and the nominal window, with its later measurement time. Unknown, cumulative, mistimed, and unverified observations remain stored but are excluded from learning. These checks establish consistency of the creator's declaration, not independent verification of platform metrics. Collection reminders show when comparable feedback is due.
+Manual feedback needs `observed_at`. A 24-hour observation has a ±1-hour tolerance; a 7-day observation has a ±6-hour tolerance. Later analytics reports can declare an interval matching the publication time and nominal window end. Unknown, cumulative, mistimed, and unverified observations are retained but excluded. Collection reminders show when comparable measurements are due.
 
-The next strategist run consumes its frozen snapshot. This is an explicit adaptive policy, not model fine-tuning or causal evidence of higher engagement. The UI displays counts, exclusions, descriptive ranges, and this limitation alongside the preference.
+These are checks on declared data and conservative product heuristics. They do not verify platform metrics independently, fine-tune a model, or establish causal engagement gains. Topic, timing, and audience differences can explain observed rates. The UI exposes the exclusions and uncertainty alongside the selected preference.
 
-## Evaluation and recorded results
+## Evaluation: results and limits
 
-The evaluator provides a fast eight-pair smoke suite and a **fresh suite of 12 unseen briefs × two voices = 24 pairs**. Optional voice extraction learns both profiles from five authored samples each. Six blind voice comparisons exercise correct, swapped, and neutral profiles. These remain fictional voices; authentic creator samples stay private.
+The fresh benchmark uses **12 new authored briefs × two fictional voices = 24 pairs**. Both voice profiles were learned from five samples. Writing used GPT-5.1 and judging used GPT-4.1 through Mesh. Candidate order was blinded and randomized; different models can still share biases.
 
-**Fresh benchmark:** 4/24 pairs were scored on the first attempt before a connection interruption; [transport-only recovery](evals/fresh-recovered/RESULTS.md) completed **23/24**. The original strategy-validation failure remains in the denominator. Across the 23 scored pairs, means were **4.817 → 4.913 / 5**, with **8 wins, 12 ties and 3 regressions**. The descriptive 95% paired interval for the change was **−0.0522 to +0.2435**, which includes zero. This does not establish a general quality improvement.
+| Measure | Recorded result |
+|---|---|
+| First-attempt scored completion | **4/24**; other cases include transport errors and one strategy-validation failure |
+| Scored completion after transport-only recovery | **23/24**; successful cases and judgments retained |
+| Mean quality score, 1–5 | **4.817 → 4.913** across the 23 scored pairs |
+| Wins / ties / regressions | **8 / 12 / 3** |
+| Descriptive 95% interval for paired change | **−0.0522 to +0.2435**, including zero |
+| Explicit word/format failures | **16 before → 15 after**, out of 23 assessed pairs |
+| Learning checks | Policy reversal and both blinded actual-opening comparisons passed |
+| Blind target-voice identification | Correct profile **2/2**; swapped **0/2**; neutral **1/2** |
 
-Exact word/format checks failed for **16 originals and 15 final drafts** out of 23 assessed pairs, despite high model scores. The two controlled feedback comparisons both changed the actual opening as intended, confirmed by a blinded opening classifier; policy reversal also passed. Those checks demonstrate adaptation, not audience uplift.
+Both swapped outputs were identified as the opposite voice supplied. These small controlled checks show profile influence and feedback adaptation. They do **not** establish general voice fidelity, general writing improvement, or audience uplift. Quality means exclude unscored failures; completion denominators do not.
 
-In the six blinded voice checks, both correct profiles were identified as their intended voices. Both swapped profiles were identified as the opposite voice supplied; neutral profiles matched the target in one of two cases. This supports a profile effect in these controlled examples, not general voice fidelity.
+The main measured weakness is brief-specific word/format compliance: high model scores coexisted with **15 failing final drafts**. Platform schemas enforce some limits, but the application does not yet turn arbitrary brief requirements into a structured, enforced contract. Factual-care scores are also model opinions, not external fact-checking.
 
-Live validation exposed newsletter, image-prompt and strategy-explanation length failures. Scoped fixes were then verified separately: a **630-word newsletter**, an initial visual and a regenerated visual, and a valid strategy explanation. [Targeted validation and actual Mesh images](evals/UPGRADE_VALIDATION.md) preserve all earlier failures. These later checks do not replace the benchmark or establish reliability across unseen cases. Free-form brief word limits remain a known weakness; visible word counts and manual editing help the creator review them.
+- [Recovered report](evals/fresh-recovered/RESULTS.md), [raw cases](evals/fresh-recovered/results.json), and [CSV](evals/fresh-recovered/results.csv).
+- [Original first attempt](evals/fresh/RESULTS.md) and [Codex-assisted review of three pairs](evals/fresh/REVIEW.md), explicitly not independent human assessment.
+- [Scoped follow-up validation](evals/UPGRADE_VALIDATION.md): a 630-word newsletter, initial and regenerated Mesh images, and the previously failing strategy explanation. These checks preserve earlier failures and do not replace the benchmark.
+- [Usage accounting](evals/fresh-recovered/USAGE.json): recorded tokens and known gaps; no invented dollar total or billing guarantee.
+- [Earlier eight-pair results](evals/RESULTS.md) and [historical experiments](evals/history/). Earlier four-dimension scores are not directly comparable to the fresh five-dimension rubric.
 
-**Preserved earlier result (GPT-5.1 through Mesh, four-dimension rubric):** 8/8 pairs completed after recovery, with mean scores **4.562 → 4.938 / 5**, **6 wins, 1 tie, and 1 regression**. First-attempt completion was **4/8**. The original report, failures, and [qualitative review](evals/REVIEW.md) remain unchanged. These numbers describe the earlier configuration, not a certification of the upgraded build.
+The implementation at [commit `68ca3ae`](https://github.com/chatkausik/creatoros-content-studio/commit/68ca3ae6c5f535f0a9de9ef3877c54bb64b092a7) passed **151 regression tests**, the production build, eight fixture cases, and submission preflight in [GitHub CI](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38627531117). Fixture quality scores are intentionally null: deterministic examples test workflow mechanics.
 
-Run the reproducible, free fixture checks into a separate output directory:
+## Reproduce the checks
+
+These commands make no paid AI requests and keep committed evidence intact:
 
 ```sh
-.venv/bin/python scripts/evaluate.py --output /tmp/creatoros-fixture-evaluation
+.venv/bin/python -m pip install -r requirements-dev.txt -c constraints.txt
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q
+npm --prefix frontend run build
+.venv/bin/python scripts/evaluate.py --output data/evaluations/fixture-check
+.venv/bin/python scripts/check_submission.py
 ```
 
-Preview the bounded fresh benchmark without making AI calls:
+Preview a new live benchmark without calling Mesh:
 
 ```sh
 MESH_CHAT_MODEL=openai/gpt-5.1 .venv/bin/python scripts/evaluate.py --live \
   --suite fresh --learn-voices --voice-checks --judge-model openai/gpt-4.1 \
-  --max-generation-runs 34 --output evals/fresh --plan-only
+  --max-generation-runs 34 --output data/evaluations/my-fresh --plan-only
 ```
 
-Remove `--plan-only` to run it using Mesh credits. The cap bounds pipeline runs, not dollars: the preview also lists the maximum possible requests including schema correction. Existing live output directories are protected against accidental overwrite. Every completed stage of the benchmark checkpoints progress and keeps its private run workspace for interruption recovery.
+Remove `--plan-only` to spend Mesh credits. Use a new output directory for each experiment; `data/` is ignored by Git. The cap bounds pipeline runs, **not dollars**. The preview lists maximum possible requests including schema corrections. Images are excluded from the benchmark. Review the plan and account balance before running it.
 
-The live judge scores **brief fulfillment, specificity, clarity, brand fit, and factual care** from 1–5. It can use a separately configured model from the writer through the same Mesh gateway; different models still have correlated preferences and biases. Candidate order is randomized and stage labels are hidden. Reports include explicit word/format constraint checks, per-dimension scores, descriptive paired bootstrap intervals, first-pass completion, failures, and retained regressions. The five-dimension composite is not directly comparable with the earlier four-dimension report. Model factual-care judgments are not external fact-checking.
-
-A separate blinded call classifies only each feedback ablation's first sentence, retaining the exact sentence and rationale. A metadata change alone cannot pass this opening check. The voice judge sees anonymous reference samples and final prose, never the intended profile condition.
-
-Reports include completion rate, every case, paired deltas, wins, ties, losses, and regressions. Quality averages are conditional on successful generation and judging; failed cases remain in the completion denominator. Failed run stages, partial drafts, and sanitized validation diagnostics are retained. Raw rejected provider responses stay in ignored local diagnostic files. Images are excluded to keep evaluation spending focused.
-
-**Fresh first-attempt evidence:** [report](evals/fresh/RESULTS.md), [raw results](evals/fresh/results.json), [CSV](evals/fresh/results.csv), and [qualitative inspection of three pairs](evals/fresh/REVIEW.md). The first attempt includes a connection interruption, a strategy validation failure, and word-limit misses. Model scores must be read alongside those failures. Earlier results remain in [evals/RESULTS.md](evals/RESULTS.md). Fixture results report mechanics such as changed drafts; their quality scores are deliberately null. The script never manufactures scores when a live request fails. A fixture pass is not evidence that AI writing quality improved.
-
-The [initial eight-pair live benchmark](evals/history/initial/RESULTS.md) scored **4.469 → 4.906 / 5**, with **7 wins, 1 tie, and 0 losses**. A stricter follow-up exposed generation failures and weaknesses in opening classification; [that report is preserved too](evals/history/strict-first/RESULTS.md). The initial score does not certify the upgraded build. Use the fresh reports to assess current completion and the stricter checks, including unresolved failures.
-
-The [diagnostic mini-model run](evals/history/diagnostic-mini/RESULTS.md) retained three scored regressions and three generation failures. The [production model's first attempt](evals/history/production-first/RESULTS.md) completed four of eight pairs; the other four hit an unnecessarily restrictive 500-character limit on evidence notes. The limit now allows 1,200 characters while preserving content and rubric validation. These experiments changed model or validation configuration and are not a controlled comparison between model families.
-
-Operational failures can be resumed from a compatible report's frozen inputs and completed artifacts, without rerolling successful drafts or judgments. Prompt/model/manifest changes are rejected. Use a separate output directory to retain the original report:
+To recover transport failures from **your own compatible completed report**, preserve the originating code/settings and choose a new destination:
 
 ```sh
 MESH_CHAT_MODEL=openai/gpt-5.1 .venv/bin/python scripts/evaluate.py --live \
-  --resume-results evals/fresh/results.json --judge-model openai/gpt-4.1 \
-  --retry-transport-only --output evals/fresh-recovered
+  --resume-results data/evaluations/my-fresh/results.json \
+  --judge-model openai/gpt-4.1 --retry-transport-only \
+  --output data/evaluations/my-fresh-recovered
 ```
 
-Recovered reports retain first-attempt completion, previous errors, and separate recovery accounting. `--retry-transport-only` limits recovery to connection failures, timeouts, rate limits, and transient server errors, preserving schema failures as well as completed quality failures. A completed but unsuccessful quality or opening comparison is retained as evidence, not retried until it passes.
+Transport-only recovery retries connection failures, timeouts, rate limits, and transient server errors; schema failures and completed quality failures remain evidence. Recovery also spends credits. Do not target committed reports or reuse an existing recovery destination. Interrupted partial runs can continue from their `progress.json`, but require their original ignored evaluation workspace as well. Frozen prompt/model compatibility checks still apply.
 
-The benchmark is small and synthetic, model judging is subjective, and engagement is not a causal experiment. Review at least two pairs manually before presenting live quality claims. Record disagreements and retain regressions.
+The [test workflow](.github/workflows/tests.yml) runs without AI credentials. Preflight checks syntax, manifests, evaluation artifacts, configuration, and basic secret hygiene; it cannot certify a valid Mesh key or organizer eligibility. Python direct versions are recorded in `constraints.txt`; the frontend uses its committed npm lockfile.
 
-```sh
-.venv/bin/python -m pip install -r requirements-dev.txt -c constraints.txt
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest
-.venv/bin/python scripts/check_submission.py
-npm --prefix frontend run build
-```
+## Next enhancements — proposed, not implemented
 
-`check_submission.py` inspects local syntax, manifests, Mesh configuration, evaluation files, and basic secret hygiene. It cannot certify a valid Mesh key, GitHub repository visibility, or organizer CI.
+Prioritize a stronger measured loop before adding more agents. Each proposal has a visible demonstration and an acceptance criterion.
 
-The separate [CreatorOS test workflow](.github/workflows/tests.yml) builds the frontend and runs regression and fixture checks without an API key or paid calls. It leaves the committed live reports intact. `constraints.txt` records the direct Python package versions exercised locally; the frontend uses its committed npm lockfile.
+| Priority | Enhancement | User experience and acceptance criterion |
+|---|---|---|
+| 1 | **Brief contracts and targeted repair** | Turn word, bullet, hashtag, and required-section limits into an editable checklist frozen with the run. Show exact violations and repair within a bounded budget. A high judge score cannot silently erase a failed check; unresolved constraints stay visible at approval. |
+| 2 | **Real-feedback import inbox** | Preview a creator-supplied metrics file, map posts and measurement windows, and explain excluded rows. Importing the same file twice adds no observations; a correction adds a revision. Cumulative or mistimed counts remain excluded from learning. |
+| 3 | **Experiment Lab** | Freeze a hypothesis, metric, observation window, and hook assignments before results arrive. Compare matched drafts with learning enabled/disabled and show coverage gaps. Insufficient data stays inconclusive; assignments and all outcomes remain auditable. |
+| 4 | **Interactive evidence replay** | Let a judge step through a recorded brief → critique → revision → visual → feedback → next-opening chain without credentials. Each step links to its actual artifact. Recorded live outputs and fixtures are clearly labeled, with no claim of real-time execution. |
+| 5 | **Creator-approved style memory** | Propose voice preferences from accepted human edits, such as fewer rhetorical questions. Let the creator accept or reject each rule. The next draft cites the profile version used; reverting a rule leaves historical runs unchanged. |
+| 6 | **Source-backed claim cards** | Attach supplied source excerpts to factual claims and flag unsupported numbers or personal anecdotes. Preserve links through revision; changing a source invalidates its associated support. Source attribution remains distinct from truth verification. |
+| 7 | **Campaign composer** | Turn one idea into a connected LinkedIn post, newsletter, and visual with a shared message and calendar. Keep independent format checks and approvals; a changed core claim marks affected variants for review. Export the campaign for manual publishing. |
 
-## API and persistence
-
-The interactive API schema is available at **http://127.0.0.1:8000/docs**. Generation creates a run immediately; the frontend polls persisted progress. Brands, samples, posts, draft versions, feedback observations, snapshots, and decision events live in SQLite under `CREATOROS_DATA_DIR`. Generated images are local assets in the same data directory.
-
-Scheduling is durable: store UTC timestamps, display local time, and transition due approved posts into a ready state. This release uses manual LinkedIn publication and manually entered engagement. It does not include an automatic LinkedIn publisher, authentication, multi-user isolation, or a production deployment configuration. Keep the local service bound to `127.0.0.1`.
+Recommended sequence: **brief contracts → feedback import → Experiment Lab**, with evidence replay as parallel presentation work. These address the measured weakness and the challenge's highest-weighted feedback loop. Style memory, claim cards, and campaign composition broaden the product afterward. Automatic publishing and metric collection are later extensions requiring platform access; the import inbox does not depend on it. Any added AI processing must continue through Mesh.
 
 ## Submission
 
-The challenge requires a **public GitHub repository** and the organizer's unchanged workflow at `.github/workflows/agent-arena-2026-checks.yml`.
+The [public repository](https://github.com/chatkausik/creatoros-content-studio) contains the source, dependency manifests, [design note](docs/DESIGN.md), evaluation evidence, and [demo materials](docs/DEMO.md). The [submission handoff](docs/SUBMISSION.md) maps the challenge requirements to evidence.
 
-Configure these GitHub repository secrets under **Settings → Secrets and variables → Actions**:
+For a fork or new submission, configure repository Actions secrets named `MESH_API_KEY` and `SUBMISSION_TOKEN`. Preserve the organizer workflow at `.github/workflows/agent-arena-2026-checks.yml` unchanged. Check both workflows for the exact submission commit and confirm the matching result on the organizer dashboard.
 
-- `MESH_API_KEY`: the Mesh key used by your checks.
-- `SUBMISSION_TOKEN`: the registration token from your submission dashboard.
-
-Push the submission commit and verify its Actions result and dashboard status. Local checks do not prove that a repository has been published or the organizer's remote checks passed. The repository must contain source, dependency manifests, this README, [design decisions](docs/DESIGN.md), and actual [evaluation results](evals/RESULTS.md). The [submission handoff](docs/SUBMISSION.md) maps each requirement to evidence and lists the remaining publication steps. [Demo materials](docs/DEMO.md) include the captioned walkthrough and a longer recording storyboard.
+**Last verified organizer result for `68ca3ae`:** [all four critical checks and three advisory checks passed](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38627531315), but recording returned HTTP 403 because submissions had not opened. Opening time is **October 14, 2026 at 11:30 PM Eastern / October 15 at 03:30 UTC**. That run did not establish eligibility. The separate [retry workflow](.github/workflows/agent-arena-opening-retry.yml) is scheduled for 03:43 UTC with 04:43 and 05:43 fallbacks; GitHub can delay schedules. Check its actual outcome rather than treating a scheduled retry as submission success.
