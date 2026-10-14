@@ -1,6 +1,6 @@
 """Separate, versioned responsibilities; no prompt asks for hidden reasoning."""
 
-PROMPT_VERSION = "2026-10-14.5"
+PROMPT_VERSION = "2026-10-14.6"
 
 PLATFORM_RULES = {
     "linkedin": "Write a standalone LinkedIn post, generally 120–220 words and at most 3,000 characters. Use short paragraphs and one actionable idea or example. Return a short internal title; never repeat that title inside content. No Markdown formatting or engagement bait. Plain bullets, bare URLs and voice-appropriate emojis are allowed.",
@@ -22,6 +22,14 @@ Writing samples establish style, not new facts. Never transfer sample-specific
 personal experiences, customer names, achievements or measurements into a new
 post unless the current brief explicitly supplies them. Only voice-profile
 evidence may quote sample passages; draft original prose for the new brief.
+The optional brief_contract contains explicit creator-confirmed body constraints.
+Honor every populated constraint alongside the hard platform requirements;
+its word bounds override general stylistic word-count targets. Word counts
+include headings, bullet markers and hashtags and use whitespace-separated
+tokens. Required section names must appear on their own lines, separated from
+paragraphs, as plain-text headings. Do not claim a constraint passed when the
+supplied deterministic contract_checks reports a violation. Empty contracts
+do not imply all free-form brief requirements were checked.
 """
 
 PROFILE = SHARED + """Your role is VOICE ANALYST. Infer a practical brand profile
@@ -109,6 +117,12 @@ a title, generic headline or motivational slogan before that opening. Keep the
 post plain text: no **bold**, Markdown headings, backticks or Markdown links.
 Resolve requests with focused substitutions; do not automatically lengthen
 every paragraph. Preserve already-satisfied requirements and the concrete example.
+When contract_checks or editor_review.contract_requests lists violations, repair
+them even if the editor gave every criterion a 5. Use the actual and expected
+counts to budget the correction; a high score cannot override a hard constraint.
+Preserve previously passing contract checks. After a substantive revision is
+already saved, a small focused correction that measurably repairs a constraint
+is acceptable; do not expand the whole draft merely to change more words.
 """
 
 VISUAL = SHARED + """Your role is VISUAL DIRECTOR. Read the final post and

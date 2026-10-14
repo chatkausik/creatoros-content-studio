@@ -6,20 +6,22 @@ import hashlib
 import json
 import logging
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .config import ROOT, Settings, load_settings
 from .fixtures import seed_demo
+from .feedback import FeedbackInput, FeedbackError, prepare_feedback
+from .contracts import Contract, check_contract, suggest_contract
+from .feedback_imports import router as feedback_import_router
 from .learning import HOOKS
 from .service import create_run, hydrate_post, learn, process_due_posts
 from .store import Store, utcnow
@@ -83,6 +85,12 @@ class RunInput(BaseModel):
     generate_image: bool = False
     platform: Platform = "linkedin"
     model_preset: Literal["budget", "submission-tested"] | None = None
+    contract: Contract = Field(default_factory=Contract)
+
+
+class ContractSuggestionInput(BaseModel):
+    brief: str = Field(min_length=1, max_length=6000)
+    platform: Platform = "linkedin"
 
 
 class ScheduleInput(BaseModel):
@@ -111,42 +119,6 @@ class PublishInput(BaseModel):
         return value.astimezone(timezone.utc)
 
 
-class FeedbackInput(BaseModel):
-    impressions: int = Field(ge=0, le=10**12, strict=True)
-    reactions: int = Field(default=0, ge=0, le=10**12, strict=True)
-    comments: int = Field(default=0, ge=0, le=10**12, strict=True)
-    reposts: int = Field(default=0, ge=0, le=10**12, strict=True)
-    window: Literal["24h", "7d", "unknown", "cumulative"] = "24h"
-    source: Source = "manual"
-    observed_at: datetime | None = None
-    window_start: datetime | None = None
-    window_end: datetime | None = None
-    source_url: str = Field(default="", max_length=2000)
-    notes: str = Field(default="", max_length=1200)
-
-    @field_validator("observed_at", "window_start", "window_end")
-    @classmethod
-    def valid_observation_time(cls, value):
-        if value is not None:
-            if value.tzinfo is None or value > datetime.now(timezone.utc):
-                raise ValueError("Measurement time must include a timezone and cannot be in the future.")
-            return value.astimezone(timezone.utc)
-        return value
-
-    @model_validator(mode="after")
-    def complete_interval(self):
-        if bool(self.window_start) != bool(self.window_end):
-            raise ValueError("Provide both the measurement window start and end, or leave both empty.")
-        if self.window_start and self.window_end <= self.window_start:
-            raise ValueError("The measurement window must end after it starts.")
-        return self
-
-    @field_validator("source_url")
-    @classmethod
-    def safe_source_url(cls, value):
-        if value and (urlparse(value).scheme not in {"https", "http"} or not urlparse(value).netloc):
-            raise ValueError("Use a full HTTP or HTTPS source URL.")
-        return value
 
 
 class LearnInput(BaseModel):
@@ -227,6 +199,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.close()
 
     app = FastAPI(title="CreatorOS", version="1.0.0", lifespan=lifespan)
+    app.include_router(feedback_import_router)
+    from .experiments import build_router
+    app.include_router(build_router(create_run))
     app.add_middleware(CORSMiddleware, allow_origins=[
         "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"
     ], allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type"])
@@ -276,6 +251,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/health")
     def health():
         return {"status": "ok", "service": "creatoros", "version": "1.0.0"}
+
+    @app.post("/api/contracts/suggest")
+    def suggest_rules(payload: ContractSuggestionInput):
+        return suggest_contract(payload.brief, payload.platform)
 
     @app.get("/api/bootstrap")
     def bootstrap():
@@ -457,11 +436,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if post.get("platform", "linkedin") == "linkedin" and len(payload.content) > 3000:
                 raise HTTPException(422, "LinkedIn content must be at most 3,000 characters.")
             versions = list(post.get("versions", []))
+            contract_checks = check_contract(payload.content, post.get("contract"))
             versions.append({"id": str(uuid4()), "version": len(versions) + 1, "content": payload.content,
                              "title": payload.title or post["title"], "kind": "human_edit", "source": "human",
-                             "reason": payload.reason, "created_at": utcnow()})
+                             "reason": payload.reason, "created_at": utcnow(), "contract_checks": contract_checks})
             changes = {"content": payload.content, "versions": versions, "review_stale": True,
-                       "image_stale": bool(post.get("image_url")), "status": "needs_review", "approved_at": None}
+                       "image_stale": bool(post.get("image_url")), "status": "needs_review", "approved_at": None,
+                       "contract_checks": contract_checks}
             if payload.title:
                 changes["title"] = payload.title
             result = db().patch("posts", post_id, changes)
@@ -514,6 +495,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(409, "Wait for the current review or visual generation to finish before approval.")
             if post["status"] not in {"draft", "needs_review", "approved"} or not post.get("content"):
                 raise HTTPException(409, "Only completed drafts can be approved.")
+            contract_checks = check_contract(post["content"], post.get("contract"))
+            if contract_checks["passed"] is False:
+                raise HTTPException(409, "This draft does not meet its agreed brief contract. Edit the text to resolve: " + "; ".join(contract_checks["violations"]))
+            if post.get("platform") == "newsletter":
+                from .schemas import NewsletterDraft
+                try:
+                    NewsletterDraft.model_validate({"title": post["title"], "content": post["content"]})
+                except ValidationError as error:
+                    raise HTTPException(409, "This newsletter does not meet its platform requirements. " + "; ".join(item["msg"] for item in error.errors(include_input=False))) from None
             if post["status"] == "approved":
                 return hydrate_post(db(), post)
             latest_review = (post.get("reviews") or [None])[-1]
@@ -569,44 +559,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.put("/api/posts/{post_id}/feedback")
     def feedback(post_id: str, payload: FeedbackInput):
-        post = required("posts", post_id)
-        if post["status"] not in {"published_manually", "published"}:
-            raise HTTPException(409, "Only published posts can receive performance feedback.")
-        if post.get("is_demo") and payload.source != "simulated":
-            raise HTTPException(400, "Demonstration posts can only receive simulated feedback.")
-        duration = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}.get(payload.window)
-        published = datetime.fromisoformat(post["published_at"].replace("Z", "+00:00"))
-        expected = published + duration if duration else None
-        timing = "simulated" if payload.source == "simulated" else "unverified"
-        if payload.source != "simulated" and payload.observed_at and expected:
-            tolerance = timedelta(hours=1 if payload.window == "24h" else 6)
-            if payload.window_start and payload.window_end:
-                matched = (abs(payload.window_start - published) <= timedelta(minutes=1)
-                           and abs(payload.window_end - expected) <= timedelta(minutes=1)
-                           and payload.observed_at >= payload.window_end)
-            else:
-                matched = abs(payload.observed_at - expected) <= tolerance
-            timing = "window_matched" if matched else "out_of_window"
-        observation = {**payload.model_dump(mode="json"), "id": f"{post_id}:{payload.source}:{payload.window}",
-                       "post_id": post_id, "brand_id": post["brand_id"], "platform": post.get("platform", "linkedin"),
-                       "captured_at": utcnow(), "timing_status": timing,
-                       "window_start": payload.window_start.isoformat() if payload.window_start else published.isoformat() if duration else None,
-                       "window_end": payload.window_end.isoformat() if payload.window_end else expected.isoformat() if expected else None,
-                       "window_basis": "declared_interval" if payload.window_start else "capture_age" if payload.observed_at else "unverified"}
         with db().lock:
-            previous = db().get("feedback", observation["id"])
-            if previous and all(previous.get(key) == value for key, value in observation.items() if key != "captured_at"):
-                return previous
-            if previous and not previous.get("revision_id"):
-                legacy = {**previous, "id": str(uuid4()), "feedback_id": previous["id"], "legacy": True}
-                db().put("feedback_revisions", legacy)
-            revision_id = str(uuid4())
-            observation["revision_id"] = revision_id
-            observation["revision"] = (previous or {}).get("revision", 0) + 1
-            db().put("feedback_revisions", {**observation, "id": revision_id, "feedback_id": observation["id"]})
-            db().put("feedback", observation)
-        db().add_event(post_id, "feedback", f"Recorded {payload.window} performance", f"{payload.source} observation: {payload.impressions} impressions, {payload.comments} comments, {payload.reposts} reposts. Timing: {timing}.", [revision_id])
-        return observation
+            post = required("posts", post_id)
+            try:
+                observation, records = prepare_feedback(db(), post, payload)
+            except FeedbackError as error:
+                raise HTTPException(error.status_code, str(error)) from None
+            db().put_many(records)
+            return observation
 
     @app.post("/api/brands/{brand_id}/learn")
     def learning(brand_id: str, payload: LearnInput):

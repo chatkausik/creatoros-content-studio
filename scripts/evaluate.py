@@ -236,11 +236,12 @@ async def judge_pair(client: Any, brief: str, profile: dict, before: str, after:
 
 
 async def generate(store: Any, settings: Any, brand_id: str, brief: str,
-                   *, learning_enabled: bool = True, platform: str = "linkedin", on_created: Any = None) -> tuple[dict, dict]:
+                   *, learning_enabled: bool = True, platform: str = "linkedin", contract: dict | None = None,
+                   on_created: Any = None) -> tuple[dict, dict]:
     from backend.creatoros.service import create_run
 
     run = create_run(store, settings, {
-        "brand_id": brand_id, "brief": brief, "platform": platform,
+        "brand_id": brand_id, "brief": brief, "platform": platform, "contract": copy.deepcopy(contract),
         "generate_image": False, "use_learning": learning_enabled,
         "feedback_source": "simulated", "window": "24h",
         "mode": "demo" if settings.demo_mode else "live",
@@ -464,6 +465,10 @@ def write_results(result: dict, output: Path) -> None:
     lines += [f"- First-pass completion: {summary.get('first_pass_completed_pairs', summary['completed_pairs'])}/{summary['pairs']}; recovered pairs: {summary.get('recovered_pairs', 0)}",
               f"- Generation / judge model: `{result['config']['model']}` / `{result['config'].get('judge_model') or result['config']['model']}`",
               f"- Explicit word/format constraints: {summary.get('constraint_failures_before', 0)} failures before; {summary.get('constraint_failures_after', 0)} after; {summary.get('constraint_scored_pairs', 0)} assessed pairs"]
+    if result["config"].get("brief_contracts_enforced") is True:
+        lines += ["- Brief contracts were frozen in new generation runs and checked during review and bounded repair. This records enforcement wiring, not a guarantee that every final draft passes."]
+    else:
+        lines += ["- Generation-time brief contract enforcement was not recorded for this saved benchmark; later feature changes do not alter its historical results."]
     identities = result.get("model_identity_evidence")
     if identities:
         lines += [f"- Returned generation model: {', '.join(identities['returned_generation_models'])}; returned judge model: {', '.join(identities['returned_judge_models'])}. Distinct model IDs do not establish statistical independence."]
@@ -825,6 +830,7 @@ async def evaluate(args: argparse.Namespace) -> int:
         "config": {"model": settings.chat_model if args.live else "deterministic-demo", "seed": args.seed,
                    "judge_model": selected_judge if args.live else None,
                    "independent_judge_model": bool(args.live and selected_judge != settings.chat_model),
+                   "brief_contracts_enforced": True,
                    "suite": suite, "case_limit": getattr(args, "case_limit", None),
                    "skip_ablations": getattr(args, "skip_ablations", False),
                    "planned_pairs": len(selected), "case_ids": [f"{b['id']}-{p['brand_id']}" for p, b in selected],
@@ -937,7 +943,9 @@ async def evaluate(args: argparse.Namespace) -> int:
                     run, post = ((run, case["post"]) if run.get("status") == "complete"
                                  else await execute_run(store, settings, run))
                 else:
-                    run, post = await generate(store, settings, profile["brand_id"], brief["brief"], platform=case["platform"], on_created=created)
+                    run, post = await generate(store, settings, profile["brand_id"], brief["brief"], platform=case["platform"],
+                                               contract=brief.get("constraints") if result["config"].get("brief_contracts_enforced") is True else None,
+                                               on_created=created)
                 brand = store.get("brands", profile["brand_id"])
                 case.update({"generation_completed": True, "checks": deterministic_checks(post),
                              "before": post.get("original_draft", ""), "after": post["content"],
@@ -998,6 +1006,8 @@ async def evaluate(args: argparse.Namespace) -> int:
                                 branch_run, branch_post = await execute_run(branch_store, branch_settings, branch_run)
                         else:
                             branch_run, branch_post = await generate(branch_store, branch_settings, "brand-ada", brief["brief"], learning_enabled=enabled,
+                                                                    platform=brief.get("platform", "linkedin"),
+                                                                    contract=brief.get("constraints") if result["config"].get("brief_contracts_enforced") is True else None,
                                                                     on_created=branch_created)
                         ablation[name] = branch_post
                         ablation[f"{name}_run"] = branch_run

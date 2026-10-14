@@ -19,12 +19,13 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import model_validator
 
 from . import prompts
+from .contracts import CONTRACT_VERSION, Contract, check_contract
 from .mesh import MeshClient, MeshError
 from .schemas import BrandProfile, Draft, InitialReview, NewsletterDraft, NewsletterRevision, RefinementReview, Revision, Strategy, VisualBrief
 
 
 HOOKS = ("problem-first", "outcome-first", "question-first")
-PIPELINE_VERSION = "2026-10-14.5"
+PIPELINE_VERSION = "2026-10-14.6"
 _active_runs: set[str] = set()
 
 
@@ -47,6 +48,7 @@ def create_run_manifest(settings, platform: str = "linkedin") -> dict:
         "Draft": NewsletterDraft if platform == "newsletter" else Draft,
         "Revision": NewsletterRevision if platform == "newsletter" else Revision,
         "InitialReview": InitialReview, "RefinementReview": RefinementReview, "VisualBrief": VisualBrief,
+        "BriefContract": Contract,
     }
     return {
         "version": 1, "chat_model": settings.chat_model, "image_model": settings.image_model,
@@ -55,6 +57,7 @@ def create_run_manifest(settings, platform: str = "linkedin") -> dict:
         "prompt_hashes": {key: hashlib.sha256(value.encode()).hexdigest() for key, value in prompt_values.items()},
         "schema_hashes": {key: hashlib.sha256(json.dumps(schema.model_json_schema(), sort_keys=True, separators=(",", ":")).encode()).hexdigest() for key, schema in output_schemas.items()},
         "schema_coverage": "captured_at_run_creation",
+        "contract_version": CONTRACT_VERSION,
         "generation_settings": {"strategist_temperature": 0.2, "writer_temperature": 0.4, "editor_temperature": 0, "revision_temperature": 0.25, "max_tokens": 2200, "image_quality": "low", "image_size": "1024x1024"},
         "provenance": "captured_at_run_creation",
     }
@@ -123,7 +126,7 @@ def _validate_hook_opening(content: str, hook: str) -> None:
         raise ValueError(f"The selected {hook} hook must begin with a statement, not a question; rewrite the first sentence to express the selected hook")
 
 
-def _review_outcome(model_review: dict, iteration: int) -> dict:
+def _review_outcome(model_review: dict, iteration: int, contract_checks: dict | None = None) -> dict:
     """Preserve model judgments; send contradictory post-revision reviews to a human."""
     output = deepcopy(model_review)
     passing = all(item["score"] >= 4 for item in output["criteria"])
@@ -141,7 +144,37 @@ def _review_outcome(model_review: dict, iteration: int) -> dict:
             "human review is required before approval."
         )
     output["approved"] = bool(output["approved"] and passing and not output["requests"])
+    if contract_checks is not None:
+        output["contract_checks"] = deepcopy(contract_checks)
+        output["contract_requests"] = [
+            {"issue": violation, "instruction": f"Repair this explicit brief contract violation without breaking the other rules: {violation}"}
+            for violation in contract_checks["violations"]
+        ]
+        if contract_checks["passed"] is False:
+            output.setdefault("raw_model_review", deepcopy(model_review))
+            output["approved"] = False
     return output
+
+
+def _contract_progress(before: str, after: str, contract: dict | None) -> bool:
+    """A small, measurable contract repair may follow the required substantive edit."""
+    old = check_contract(before, contract)
+    new = check_contract(after, contract)
+    old_failed = {item["key"]: item for item in old["checks"] if not item["passed"]}
+    new_failed = {item["key"]: item for item in new["checks"] if not item["passed"]}
+    if not old_failed or set(new_failed) - set(old_failed):
+        return False
+    numeric = [(item, new_failed[key]) for key, item in old_failed.items()
+               if key in new_failed and isinstance(item["actual"], int) and isinstance(item["expected"], int)]
+    if any(abs(old_item["actual"] - old_item["expected"]) < abs(new_item["actual"] - old_item["expected"])
+           for old_item, new_item in numeric):
+        return False
+    if set(old_failed) - set(new_failed):
+        return True
+    return any(
+        abs(old_item["actual"] - old_item["expected"]) > abs(new_item["actual"] - old_item["expected"])
+        for old_item, new_item in numeric
+    )
 
 
 def _demo_profile(samples: list[dict]) -> dict:
@@ -311,6 +344,7 @@ async def review_post(post: dict, brand_profile: dict, settings, mode: str = "li
     if platform not in prompts.PLATFORM_RULES:
         raise ValueError("Choose LinkedIn or newsletter.")
     draft = {"title": post["title"], "content": post["content"]}
+    contract_checks = check_contract(post["content"], post.get("contract"))
     (NewsletterDraft if platform == "newsletter" else Draft).model_validate(draft)
     reviews = post.get("reviews", [])
     iteration = max((item.get("iteration", 0) for item in reviews), default=0) + 1
@@ -331,16 +365,17 @@ async def review_post(post: dict, brand_profile: dict, settings, mode: str = "li
             "brief": post.get("brief", ""), "voice_profile": brand_profile,
             "selected_hook": post.get("hook", "problem-first"), "platform": platform,
             "platform_rules": prompts.PLATFORM_RULES[platform], "draft": draft,
+            "brief_contract": post.get("contract"), "contract_checks": contract_checks,
             "iteration": iteration,
             "previous_draft": {"title": previous.get("title", ""), "content": previous["content"]} if previous else None,
             "previous_requests": previous_review.get("requests", []),
             "addressed_requests": versions[-1].get("addressed_requests", []) if versions else [],
         }), RefinementReview, temperature=0)).model_dump()
-        output = _review_outcome(output, iteration)
         usage = deepcopy(client.usage)
         for item in usage:
             item["stage"] = "manual_revision_review"
         actual_model = usage[-1].get("actual_model") if usage else None
+    output = _review_outcome(output, iteration, contract_checks)
     return {
         **output, "iteration": iteration, "created_at": _now(),
         "model": "demo-fixture" if mode == "demo" else settings.chat_model,
@@ -355,6 +390,7 @@ class PipelineState(TypedDict, total=False):
     iteration: int
     approved: bool
     requires_human_review: bool
+    contract_failed: bool
 
 
 async def run_pipeline(run_id: str, store, settings) -> None:
@@ -392,6 +428,7 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         _active_runs.discard(run_id)
         return
     platform = manifest.get("platform", "linkedin")
+    contract = deepcopy(run.get("contract"))
     model = "demo-fixture" if mode == "demo" else settings.chat_model
     client.usage.extend(run.get("usage", []))
     stage_usage_start = len(client.usage)
@@ -430,7 +467,7 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         store.add_event(post_id, node, choice, reason, evidence_ids or [], event_id=f"{run_id}:{key}")
 
     def context(**extra) -> str:
-        return _json({"brief": run["brief"], "voice_profile": profile, "selected_hook": hook, "platform": platform, "platform_rules": prompts.PLATFORM_RULES[platform], **extra})
+        return _json({"brief": run["brief"], "brief_contract": contract, "voice_profile": profile, "selected_hook": hook, "platform": platform, "platform_rules": prompts.PLATFORM_RULES[platform], **extra})
 
     async def strategist(state: PipelineState) -> dict:
         stage("strategist")
@@ -460,11 +497,12 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         kind = "draft" if iteration == 0 else "revision"
         version_id = f"{run_id}:version:{iteration}"
         version = {"id": version_id, "version": iteration + 1, "kind": kind, "title": output["title"], "content": output["content"], "addressed_requests": output.get("addressed_requests", []), **{key: cached[key] for key in ("created_at", "source", "model", "prompt_version")}}
-        version.update({"actual_model": cached.get("actual_model"), "usage": cached.get("usage", []), "platform": platform})
+        checks = check_contract(output["content"], contract)
+        version.update({"actual_model": cached.get("actual_model"), "usage": cached.get("usage", []), "platform": platform, "contract_checks": checks})
         versions = [item for item in post.get("versions", []) if item.get("id") != version_id]
         versions.append(version)
         versions.sort(key=lambda item: item.get("version", 0))
-        changes = {"title": output["title"], "content": output["content"], "versions": versions}
+        changes = {"title": output["title"], "content": output["content"], "versions": versions, "contract_checks": checks}
         if iteration == 0:
             changes["original_draft"] = output["content"]
         store.patch("posts", post_id, changes)
@@ -494,13 +532,14 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         cached = artifact(key)
         if not cached:
             draft = artifact("writer" if iteration == 0 else f"revision_{iteration}")["output"]
+            checks = check_contract(draft["content"], contract)
             previous = artifact(f"editor_{iteration - 1}") if iteration else None
             previous_draft = artifact("writer" if iteration == 1 else f"revision_{iteration - 1}") if iteration else None
             if mode == "demo":
                 output = _demo_review(iteration)
             else:
-                output = (await client.complete_json(prompts.EDITOR, context(draft=draft, iteration=iteration, previous_draft=previous_draft["output"] if previous_draft else None, previous_requests=previous["output"]["requests"] if previous else [], addressed_requests=draft.get("addressed_requests", [])), InitialReview if iteration == 0 else RefinementReview, temperature=0)).model_dump()
-            output = _review_outcome(output, iteration)
+                output = (await client.complete_json(prompts.EDITOR, context(draft=draft, contract_checks=checks, iteration=iteration, previous_draft=previous_draft["output"] if previous_draft else None, previous_requests=previous["output"]["requests"] if previous else [], addressed_requests=draft.get("addressed_requests", [])), InitialReview if iteration == 0 else RefinementReview, temperature=0)).model_dump()
+            output = _review_outcome(output, iteration, checks)
             cached = save_artifact(key, output)
         output = cached["output"]
         post = store.get("posts", post_id)
@@ -509,13 +548,17 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         review.update({"actual_model": cached.get("actual_model"), "usage": cached.get("usage", [])})
         reviews = [item for item in post.get("reviews", []) if item.get("id") != review_id] + [review]
         reviews.sort(key=lambda item: item.get("iteration", 0))
-        store.patch("posts", post_id, {"reviews": reviews, "review_stale": False})
+        store.patch("posts", post_id, {"reviews": reviews, "review_stale": False, "contract_checks": output.get("contract_checks", check_contract(post["content"], contract))})
         requests = output["requests"]
         reason = " ".join(item["instruction"] for item in requests) if requests else " ".join(item["reason"] for item in output["criteria"])
         event(key, "editor", "Approved after revision" if output["approved"] else f"Revision review {iteration}: {len(requests)} edit requests", reason)
         if output.get("requires_human_review"):
             event(f"{key}:consistency", "coordinator", "Editor judgment requires human review", output["review_inconsistency"], [review_id])
-        return {"approved": output["approved"], "iteration": iteration, "requires_human_review": output.get("requires_human_review", False)}
+        if output.get("contract_checks", {}).get("passed") is False:
+            event(f"{key}:contract", "coordinator", "Brief contract requires repair", " ".join(output["contract_checks"]["violations"]), [review_id])
+            if mode == "demo" and iteration:
+                event(f"{key}:demo-contract", "coordinator", "Demo fixture requires manual correction", "The authored demo revision does not satisfy this contract. Its actual check results are preserved; edit the text or create a live run for constraint-aware AI repair.", [review_id])
+        return {"approved": output["approved"], "iteration": iteration, "requires_human_review": output.get("requires_human_review", False), "contract_failed": output.get("contract_checks", {}).get("passed") is False}
 
     async def revising_writer(state: PipelineState) -> dict:
         iteration = state.get("iteration", 0) + 1
@@ -533,17 +576,19 @@ async def run_pipeline(run_id: str, store, settings) -> None:
                 class SubstantiveRevision(revision_schema):
                     @model_validator(mode="after")
                     def content_has_changed(self):
-                        if not _substantive(previous["content"], self.content):
+                        if not _substantive(previous["content"], self.content) and not (iteration > 1 and _contract_progress(previous["content"], self.content, contract)):
                             raise ValueError("Revise the actual content substantively; punctuation or title-only changes do not address the editor")
                         _validate_hook_opening(self.content, hook)
                         return self
 
-                output = (await client.complete_json(prompts.REVISION, context(strategy=artifact("strategist")["output"], draft=previous, editor_review=review), SubstantiveRevision, temperature=0.25)).model_dump()
-            if not _substantive(previous["content"], output["content"]):
+                output = (await client.complete_json(prompts.REVISION, context(strategy=artifact("strategist")["output"], draft=previous, editor_review=review, contract_checks=check_contract(previous["content"], contract)), SubstantiveRevision, temperature=0.25)).model_dump()
+            if not _substantive(previous["content"], output["content"]) and not (iteration > 1 and _contract_progress(previous["content"], output["content"], contract)):
                 raise MeshError("The writer returned only cosmetic edits. The original draft is saved; retry the revision step.")
             cached = save_artifact(key, output)
         save_version(cached, iteration)
-        event(key, "writer", f"Substantive revision {iteration} saved", " ".join(cached["output"].get("addressed_requests", [])), [f"{run_id}:review:{iteration - 1}"])
+        previous_content = artifact("writer" if iteration == 1 else f"revision_{iteration - 1}")["output"]["content"]
+        label = "Substantive revision" if _substantive(previous_content, cached["output"]["content"]) else "Focused contract repair"
+        event(key, "writer", f"{label} {iteration} saved", " ".join(cached["output"].get("addressed_requests", [])), [f"{run_id}:review:{iteration - 1}"])
         return {"iteration": iteration, "approved": False}
 
     async def visual(state: PipelineState) -> dict:
@@ -571,17 +616,24 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         return {}
 
     async def finish(state: PipelineState) -> dict:
-        status = "draft" if state.get("approved") else "needs_review"
-        store.patch("posts", post_id, {"status": status, "updated_at": _now()})
+        checks = check_contract(store.get("posts", post_id)["content"], contract)
+        status = "draft" if state.get("approved") and checks["passed"] is not False else "needs_review"
+        store.patch("posts", post_id, {"status": status, "contract_checks": checks, "updated_at": _now()})
         store.patch("runs", run_id, {"status": "complete", "stage": "complete", "completed_at": _now(), "updated_at": _now(), "error": None})
         reason = "The final editor review approved all criteria." if status == "draft" else "The bounded editor loop ended with unresolved issues; review before approval."
         if state.get("requires_human_review"):
             reason = "The editor's scores, requests and approval disagree. Its full review is retained for human judgment; no automatic approval was issued."
+        if checks["passed"] is False:
+            reason += " Explicit brief contract violations remain; correct the text before approval. " + " ".join(checks["violations"])
         event("finish", "coordinator", "Content ready for human review" if status == "draft" else "Human review required", "At least one substantive revision was saved. " + reason)
         return {}
 
     def next_after_editor(state: PipelineState) -> str:
         if state.get("iteration", 0) == 0:
+            return "revising_writer"
+        if mode == "demo" and state.get("contract_failed"):
+            return "visual"
+        if state.get("contract_failed") and state["iteration"] < max_revisions:
             return "revising_writer"
         if state.get("requires_human_review"):
             return "visual"

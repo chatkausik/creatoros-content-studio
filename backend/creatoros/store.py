@@ -81,6 +81,19 @@ class Store:
             value["id"] = identifier
             return self.put(collection, value)
 
+    def put_many(self, records: list[tuple[str, dict]]) -> None:
+        """Commit a validated import and its revisions/events as one SQLite transaction."""
+        from sqlalchemy.dialects.sqlite import insert
+        values = [(collection, deepcopy(obj)) for collection, obj in records]
+        if any(not obj.get("id") for _, obj in values):
+            raise ValueError("Stored records require an id.")
+        with self.lock, self.engine.begin() as conn:
+            for collection, obj in values:
+                query = insert(self.docs).values(collection=collection, id=obj["id"], data=obj)
+                conn.execute(query.on_conflict_do_update(
+                    index_elements=["collection", "id"], set_={"data": obj}
+                ))
+
     def add_event(self, post_id: str, node: str, choice: str, reason: str,
                   evidence_ids: list | None = None, event_id: str | None = None) -> dict:
         identifier = event_id or str(uuid4())

@@ -20,6 +20,12 @@ The editor loop is bounded to control latency and spending. A post with unresolv
 
 External APIs cannot provide a distributed exactly-once guarantee: a process crash after a provider completes work but before the application saves the result can still incur a repeated request. Persisted steps and request caching reduce that risk but do not eliminate it.
 
+## Explicit brief contracts
+
+The creator reviews a typed contract before generation: word/character limits, bullet bounds, maximum hashtags, named section headings, and plain-text requirements. Conservative local parsing suggests only recognized instructions; it never claims to understand an arbitrary brief. The canonical contract is frozen in the run and post. Counts include headings and markers and use whitespace-separated words; named sections match whole lines with case/spacing normalization.
+
+The same pure checker evaluates drafts, revisions, reviews, hydration, manual edits, and approval. Raw model reviews are retained separately from contract repair requests. Deterministic violations consume the remaining bounded revision budget even if the editor gives high scores. A small measurable repair is permitted after the required substantive first revision. Unresolved failures remain `needs_review`, and acknowledgement cannot bypass a failed contract. Newsletter approval also rechecks its platform schema after human edits. Legacy posts with no explicit contract remain unassessed for those rules.
+
 ## Data provenance
 
 | Data | Source | Treatment |
@@ -33,6 +39,14 @@ External APIs cannot provide a distributed exactly-once guarantee: a process cra
 | Fixture text | Deterministic local examples | No claim of live AI generation or quality measurement |
 
 Feedback upserts identify the post, provenance, and observation window so editing an observation does not count it twice. Corrections also append immutable revisions. New learning snapshots embed the exact eligible observations and post openings; older aggregate-only records are explicitly labeled rather than fabricated from current data. Exact repeated requests preserve the same revision. Missing/zero impressions do not produce a rate. Manual observations need a consistent measurement time or declared interval; unknown/cumulative windows remain excluded. Data-entry time is separate from measurement time.
+
+The CSV inbox uses this same feedback validator and revision planner. Preview resolves existing published posts within the selected brand/platform, records source/measurement windows, and distinguishes new, corrected, unchanged, duplicate, invalid, and learning-excluded observations. It stores a fingerprint of the relevant post and active feedback state. Commit rejects stale previews and atomically writes all valid observations, revisions, decision events, and the completed import record. Invalid rows remain explained and are skipped. Repeated commits and repeated observations are idempotent. No import infers a 24-hour window from cumulative counts or fetches external analytics.
+
+## Preregistered experiments
+
+An experiment freezes its hypothesis, scope, metric, observation window, voice, registration baseline, and balanced randomized opening assignments before reserving drafts. Each slot binds one fresh run; its post, run, slot binding, and reservation event are committed atomically. Failed runs remain part of the assignment list and cannot be replaced through the slot API. A saved analysis contains every assignment, eligible observations, missing/excluded outcomes, and descriptive ranges. Incomplete cohorts stay inconclusive. Complete cohorts still need the policy's minimum posts/exposure and separated ranges; this remains descriptive evidence, not causal proof. Analyses do not mutate active learning snapshots.
+
+One matched learning-off/on pair can be created per experiment. Its brief, contract, voice, model manifest, and baseline are frozen before either branch starts; repeated requests reuse those branches. Partial starts preserve their work. Pair drafts are excluded from the audience experiment's assigned slots. The enabled branch can choose the same hook as the disabled branch when the baseline supplies no preference; that lack of contrast is explicitly disclosed. Neither text comparison nor randomized assignment alone establishes audience uplift.
 
 The working creator profile uses eight original LinkedIn posts. Two reposts were excluded because their substantial text belonged to other authors. The source capture preserves exact post text, canonical links, displayed dates, and only explicitly displayed counts. These private local files and the generated brand profile are not committed. The public demonstration and evaluation use authored fixtures so a fresh checkout is reproducible without someone else's account.
 

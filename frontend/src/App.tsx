@@ -35,6 +35,13 @@ import {
   X,
 } from "lucide-react";
 import { api, date, hooks, label } from "./api";
+import {
+  BriefContractEditor,
+  BriefContractReport,
+  contractError,
+} from "./BriefContract";
+import FeedbackInbox from "./FeedbackInbox";
+import ExperimentLab from "./ExperimentLab";
 import type {
   Bootstrap,
   Brand,
@@ -46,6 +53,7 @@ import type {
   Snapshot,
   Evidence,
   Platform,
+  BriefContract,
 } from "./api";
 
 type Page = "studio" | "brand" | "queue" | "learning";
@@ -199,9 +207,13 @@ function Diff({ before, after }: { before: string; after: string }) {
 export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null),
     [page, setPage] = useState<Page>("studio"),
+    [learningView, setLearningView] = useState<
+      "evidence" | "inbox" | "experiments"
+    >("evidence"),
     [brandId, setBrandId] = useState(""),
     [selectedId, setSelectedId] = useState(""),
     [brief, setBrief] = useState(""),
+    [contract, setContract] = useState<BriefContract>({}),
     [mode, setMode] = useState<Mode>("demo"),
     [platform, setPlatform] = useState<Platform>("linkedin"),
     [modelPreset, setModelPreset] = useState(""),
@@ -393,6 +405,7 @@ export default function App() {
     !outstandingRequests.length &&
     !editedAfterReview;
   const inspectSnapshot = (target: Snapshot) => {
+    setLearningView("evidence");
     setPlatform(target.platform || "linkedin");
     setSource(target.source);
     setWindowValue(target.window);
@@ -415,7 +428,7 @@ export default function App() {
       ).find((f) => f.source === source && f.window === windowValue),
     }));
   const startRun = async () => {
-    if (!brand || !brief.trim()) return;
+    if (!brand || !brief.trim() || contractError(contract)) return;
     await action(
       "generate",
       async () => {
@@ -429,6 +442,12 @@ export default function App() {
           feedback_source: source,
           window: windowValue,
           generate_image: false,
+          contract: {
+            ...contract,
+            required_sections: (contract.required_sections || [])
+              .map((value) => value.trim())
+              .filter(Boolean),
+          },
         });
         setActiveRunId(run.id);
         setSelectedId(run.post_id);
@@ -741,6 +760,13 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+                    <BriefContractEditor
+                      brief={brief}
+                      platform={platform}
+                      value={contract}
+                      onChange={setContract}
+                      disabled={!!busy || pending}
+                    />
                     <div className="composer-bottom">
                       <div className="composer-settings">
                         <label className="learning-toggle">
@@ -772,6 +798,7 @@ export default function App() {
                           brief.trim().length < 10 ||
                           !!busy ||
                           pending ||
+                          !!contractError(contract) ||
                           !brand
                         }
                       >
@@ -1170,6 +1197,7 @@ export default function App() {
                               !!busy ||
                               pending ||
                               !post.content ||
+                              post.contract_checks?.passed === false ||
                               [
                                 "approved",
                                 "scheduled",
@@ -1178,6 +1206,11 @@ export default function App() {
                                 "published",
                                 "published_manually",
                               ].includes(post.status)
+                            }
+                            title={
+                              post.contract_checks?.passed === false
+                                ? "Edit the draft until all brief contract rules pass"
+                                : undefined
                             }
                           >
                             <Check size={15} />
@@ -1233,6 +1266,13 @@ export default function App() {
                   )}
                 </div>
                 <aside className="evidence-rail">
+                  {post && (
+                    <BriefContractReport
+                      contract={post.contract}
+                      checks={post.contract_checks}
+                      pending={pending}
+                    />
+                  )}
                   <section className="card insight-card">
                     <div className="rail-kicker">
                       <TrendingUp size={15} /> THE LEARNING LOOP{" "}
@@ -2191,6 +2231,7 @@ export default function App() {
                 <div className="segmented">
                   <button
                     className={source === "manual" ? "active" : ""}
+                    disabled={brand?.is_demo}
                     onClick={() => {
                       setSource("manual");
                       setSnapshotId("");
@@ -2223,272 +2264,350 @@ export default function App() {
                   </select>
                 </div>
               </div>
-              {!!snapshots.length && (
-                <div className="snapshot-picker">
-                  <label htmlFor="snapshot-version">
-                    Evidence saved with a learning decision
-                  </label>
-                  <select
-                    id="snapshot-version"
-                    value={snapshot?.id || ""}
-                    onChange={(e) => setSnapshotId(e.target.value)}
-                  >
-                    {snapshots.map((item, i) => (
-                      <option key={item.id} value={item.id}>
-                        Snapshot v{item.version}
-                        {i === 0 ? " · latest" : " · historical"} ·{" "}
-                        {date(item.created_at)}
-                      </option>
-                    ))}
-                  </select>
-                  <span>
-                    Historical observations stay frozen when metrics are
-                    corrected.
-                  </span>
-                </div>
-              )}
-              {source === "simulated" && (
-                <div className="demo-note">
-                  <FlaskConical size={16} />
-                  <span>
-                    Illustrative feedback for exploring the loop. These numbers
-                    are simulated and kept separate from your real metrics.
-                  </span>
-                </div>
-              )}
-              <div className="learning-grid">
-                <section className="card performance-card">
-                  <div className="section-heading">
-                    <div>
-                      <h2>Which opening earns a response?</h2>
-                      <p className="muted small">
-                        Comments + reposts per 1,000 impressions
-                      </p>
-                    </div>
-                    <Badge
-                      tone={
-                        snapshot?.status === "early_signal" ? "green" : "amber"
-                      }
-                    >
-                      {label(snapshot?.status || "collecting_evidence")}
-                    </Badge>
-                  </div>
-                  {snapshot ? (
-                    <>
-                      <div className="hook-chart">
-                        {hooks.map((hook) => {
-                          const stat = snapshot.stats.find(
-                            (s) => s.hook === hook,
-                          );
-                          const rate = stat?.rate ?? 0;
-                          const maximum = Math.max(
-                            1,
-                            ...snapshot.stats.map((s) => s.rate || 0),
-                          );
-                          return (
-                            <div
-                              className={`chart-row ${snapshot.preferred_hook === hook ? "preferred" : ""}`}
-                              key={hook}
-                            >
-                              <div className="chart-label">
-                                <span>{label(hook)}</span>
-                                {snapshot.preferred_hook === hook && (
-                                  <span>
-                                    <Star />
-                                    Current preference
-                                  </span>
-                                )}
-                                <strong>
-                                  {stat?.rate == null ? "—" : rate.toFixed(1)}
-                                </strong>
-                              </div>
-                              <div className="chart-track">
-                                <div
-                                  style={{
-                                    width: `${(rate / maximum) * 100}%`,
-                                  }}
-                                />
-                              </div>
-                              <small>
-                                {stat?.posts || 0} post
-                                {stat?.posts === 1 ? "" : "s"} ·{" "}
-                                {(stat?.impressions || 0).toLocaleString()}{" "}
-                                impressions
-                                {stat?.interval && (
-                                  <span className="interval-note">
-                                    90% descriptive range:{" "}
-                                    {intervalText(stat.interval)} / 1k
-                                  </span>
-                                )}
-                              </small>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="chart-footnote">
-                        <CircleHelp size={14} />
-                        An observed association, not proof that a hook caused
-                        engagement. A preference needs sufficient exposure,
-                        repeated posts, and a clear signal. Exploration
-                        continues while evidence is weak.{" "}
-                        {snapshot.uncertainty_note || ""}
-                      </div>
-                    </>
-                  ) : (
-                    <Empty
-                      icon={TrendingUp}
-                      title="Your feedback becomes the next step"
-                    >
-                      Record performance for your published posts, then update
-                      learnings to compare opening styles.
-                    </Empty>
-                  )}
-                </section>
-                <LearningChain
-                  snapshot={snapshot}
-                  previousSnapshot={previousSnapshot}
-                  posts={posts}
-                  runs={data.runs}
-                  onOpenPost={(id) => {
-                    setSelectedId(id);
-                    switchPage("studio");
-                  }}
-                  onCreate={() => {
-                    setUseLearning(true);
-                    switchPage("studio");
-                  }}
-                />
+              <div
+                className="learning-workspace-tabs"
+                role="group"
+                aria-label="Learning workspace view"
+              >
+                <button
+                  className={learningView === "evidence" ? "active" : ""}
+                  aria-pressed={learningView === "evidence"}
+                  onClick={() => setLearningView("evidence")}
+                >
+                  <TrendingUp size={15} /> Evidence & learnings
+                </button>
+                <button
+                  className={learningView === "inbox" ? "active" : ""}
+                  aria-pressed={learningView === "inbox"}
+                  onClick={() => setLearningView("inbox")}
+                >
+                  <Download size={15} /> Feedback inbox
+                </button>
+                <button
+                  className={learningView === "experiments" ? "active" : ""}
+                  aria-pressed={learningView === "experiments"}
+                  onClick={() => setLearningView("experiments")}
+                >
+                  <FlaskConical size={15} /> Experiment Lab
+                </button>
               </div>
-              {snapshot && (
-                <EvidencePanel
-                  snapshot={snapshot}
+              {brand && learningView === "inbox" && (
+                <FeedbackInbox
+                  key={`inbox:${brand.id}:${platform}:${source}`}
+                  brand={brand}
+                  platform={platform}
+                  source={source}
+                  posts={posts}
+                  onSaved={refresh}
+                  onImportPost={() => setDialog({ type: "import" })}
+                />
+              )}
+              {brand && learningView === "experiments" && (
+                <ExperimentLab
+                  key={`experiments:${brand.id}`}
+                  brand={brand}
+                  platform={platform}
+                  source={source}
+                  windowValue={windowValue}
+                  mode={mode}
+                  modelPreset={modelPreset}
+                  contract={contract}
+                  onModeChange={setMode}
+                  onSaved={refresh}
                   onOpenPost={(id) => {
                     setSelectedId(id);
+                    setActiveRunId("");
+                    setTab("revised");
+                    switchPage("studio");
+                  }}
+                  onOpenRun={(run) => {
+                    setSelectedId(run.post_id);
+                    setActiveRunId(run.id);
+                    setTab("revised");
                     switchPage("studio");
                   }}
                 />
               )}
-              <section className="card feedback-section">
-                <div className="section-heading">
-                  <div>
-                    <h2>Behind every signal, a post</h2>
-                    <p className="muted small">
-                      Record comparable metrics at the same point after
-                      publication.
-                    </p>
-                  </div>
-                  <Button
-                    kind="quiet"
-                    onClick={() => setDialog({ type: "import" })}
-                  >
-                    <Plus size={14} />
-                    Import a post
-                  </Button>
-                </div>
-                <div className="feedback-table">
-                  <div className="feedback-head">
-                    <span>POST & OPENING</span>
-                    <span>IMPRESSIONS</span>
-                    <span>COMMENTS</span>
-                    <span>REPOSTS</span>
-                    <span>RATE / 1K</span>
-                    <span />
-                  </div>
-                  {feedbackPosts.length ? (
-                    feedbackPosts.map((p) => (
-                      <div className="feedback-row" key={p.id}>
+              {learningView === "evidence" && (
+                <>
+                  {!!snapshots.length && (
+                    <div className="snapshot-picker">
+                      <label htmlFor="snapshot-version">
+                        Evidence saved with a learning decision
+                      </label>
+                      <select
+                        id="snapshot-version"
+                        value={snapshot?.id || ""}
+                        onChange={(e) => setSnapshotId(e.target.value)}
+                      >
+                        {snapshots.map((item, i) => (
+                          <option key={item.id} value={item.id}>
+                            Snapshot v{item.version}
+                            {i === 0 ? " · latest" : " · historical"} ·{" "}
+                            {date(item.created_at)}
+                          </option>
+                        ))}
+                      </select>
+                      <span>
+                        Historical observations stay frozen when metrics are
+                        corrected.
+                      </span>
+                    </div>
+                  )}
+                  {source === "simulated" && (
+                    <div className="demo-note">
+                      <FlaskConical size={16} />
+                      <span>
+                        Illustrative feedback for exploring the loop. These
+                        numbers are simulated and kept separate from your real
+                        metrics.
+                      </span>
+                    </div>
+                  )}
+                  <div className="learning-grid">
+                    <section className="card performance-card">
+                      <div className="section-heading">
                         <div>
-                          <strong>
-                            {p.title || p.brief || "Untitled post"}
-                          </strong>
-                          <span>
-                            {label(p.hook)}
-                            <span>
-                              {" "}
-                              · {p.feedback?.window || "No observation"}
-                            </span>
-                          </span>
-                          {p.feedback &&
-                            p.feedback.source === "manual" &&
-                            p.feedback.timing_status !== "window_matched" && (
-                              <span className="timing-warning">
-                                {p.feedback.timing_status === "out_of_window"
-                                  ? "Outside the measurement window"
-                                  : "Measurement time unverified"}{" "}
-                                · excluded from learning
-                              </span>
-                            )}
+                          <h2>Which opening earns a response?</h2>
+                          <p className="muted small">
+                            Comments + reposts per 1,000 impressions
+                          </p>
                         </div>
-                        <span>
-                          {p.feedback?.impressions?.toLocaleString() ?? "—"}
-                        </span>
-                        <span>{p.feedback?.comments ?? "—"}</span>
-                        <span>{p.feedback?.reposts ?? "—"}</span>
-                        <span className="rate">
-                          {p.feedback?.impressions
-                            ? (
-                                ((p.feedback.comments + p.feedback.reposts) *
-                                  1000) /
-                                p.feedback.impressions
-                              ).toFixed(1)
-                            : "—"}
-                        </span>
-                        <Button
-                          kind="quiet"
-                          onClick={() =>
-                            setDialog({ type: "feedback", post: p })
+                        <Badge
+                          tone={
+                            snapshot?.status === "early_signal"
+                              ? "green"
+                              : "amber"
                           }
                         >
-                          <PenLine size={13} />
-                          <span>{p.feedback ? "Edit" : "Add"}</span>
-                        </Button>
+                          {label(snapshot?.status || "collecting_evidence")}
+                        </Badge>
                       </div>
-                    ))
-                  ) : (
-                    <Empty
-                      icon={TrendingUp}
-                      title="No feedback in this view yet"
-                    >
-                      Import a published post or choose demo feedback to explore
-                      how learning works.
-                    </Empty>
+                      {snapshot ? (
+                        <>
+                          <div className="hook-chart">
+                            {hooks.map((hook) => {
+                              const stat = snapshot.stats.find(
+                                (s) => s.hook === hook,
+                              );
+                              const rate = stat?.rate ?? 0;
+                              const maximum = Math.max(
+                                1,
+                                ...snapshot.stats.map((s) => s.rate || 0),
+                              );
+                              return (
+                                <div
+                                  className={`chart-row ${snapshot.preferred_hook === hook ? "preferred" : ""}`}
+                                  key={hook}
+                                >
+                                  <div className="chart-label">
+                                    <span>{label(hook)}</span>
+                                    {snapshot.preferred_hook === hook && (
+                                      <span>
+                                        <Star />
+                                        Current preference
+                                      </span>
+                                    )}
+                                    <strong>
+                                      {stat?.rate == null
+                                        ? "—"
+                                        : rate.toFixed(1)}
+                                    </strong>
+                                  </div>
+                                  <div className="chart-track">
+                                    <div
+                                      style={{
+                                        width: `${(rate / maximum) * 100}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <small>
+                                    {stat?.posts || 0} post
+                                    {stat?.posts === 1 ? "" : "s"} ·{" "}
+                                    {(stat?.impressions || 0).toLocaleString()}{" "}
+                                    impressions
+                                    {stat?.interval && (
+                                      <span className="interval-note">
+                                        90% descriptive range:{" "}
+                                        {intervalText(stat.interval)} / 1k
+                                      </span>
+                                    )}
+                                  </small>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="chart-footnote">
+                            <CircleHelp size={14} />
+                            An observed association, not proof that a hook
+                            caused engagement. A preference needs sufficient
+                            exposure, repeated posts, and a clear signal.
+                            Exploration continues while evidence is weak.{" "}
+                            {snapshot.uncertainty_note || ""}
+                          </div>
+                        </>
+                      ) : (
+                        <Empty
+                          icon={TrendingUp}
+                          title="Your feedback becomes the next step"
+                        >
+                          Record performance for your published posts, then
+                          update learnings to compare opening styles.
+                        </Empty>
+                      )}
+                    </section>
+                    <LearningChain
+                      snapshot={snapshot}
+                      previousSnapshot={previousSnapshot}
+                      posts={posts}
+                      runs={data.runs}
+                      onOpenPost={(id) => {
+                        setSelectedId(id);
+                        switchPage("studio");
+                      }}
+                      onCreate={() => {
+                        setUseLearning(true);
+                        switchPage("studio");
+                      }}
+                    />
+                  </div>
+                  {snapshot && (
+                    <EvidencePanel
+                      snapshot={snapshot}
+                      onOpenPost={(id) => {
+                        setSelectedId(id);
+                        switchPage("studio");
+                      }}
+                    />
                   )}
-                </div>
-              </section>
-              <section className="card evaluation-card">
-                <div className="section-heading">
-                  <div className="section-title">
-                    <FlaskConical size={19} />
-                    <h2>Does the editor actually help?</h2>
-                  </div>
-                  <Badge>Self-evaluation</Badge>
-                </div>
-                <p>
-                  Blind comparisons of original and revised drafts, scored on
-                  brief fulfillment, specificity, clarity, and brand fit.
-                </p>
-                {data.evaluation && Object.keys(data.evaluation).length > 0 ? (
-                  <EvaluationReport evaluation={data.evaluation} />
-                ) : (
-                  <div className="evaluation-empty">
-                    <div>
-                      <strong>The evaluation harness is ready.</strong>
-                      <p>
-                        Run the evaluation script to measure improvement.
-                        Results will appear here when saved.
-                      </p>
+                  <section className="card feedback-section">
+                    <div className="section-heading">
+                      <div>
+                        <h2>Behind every signal, a post</h2>
+                        <p className="muted small">
+                          Record comparable metrics at the same point after
+                          publication.
+                        </p>
+                      </div>
+                      <Button
+                        kind="quiet"
+                        onClick={() => setDialog({ type: "import" })}
+                      >
+                        <Plus size={14} />
+                        Import a post
+                      </Button>
                     </div>
-                    <code>python scripts/evaluate.py</code>
-                  </div>
-                )}
-                <div className="evaluation-note">
-                  <CircleHelp size={14} />
-                  <span>
-                    Model judging is subjective. Demo fixtures validate the
-                    workflow; only live evaluation measures generated output.
-                  </span>
-                </div>
-              </section>
+                    <div className="feedback-table">
+                      <div className="feedback-head">
+                        <span>POST & OPENING</span>
+                        <span>IMPRESSIONS</span>
+                        <span>COMMENTS</span>
+                        <span>REPOSTS</span>
+                        <span>RATE / 1K</span>
+                        <span />
+                      </div>
+                      {feedbackPosts.length ? (
+                        feedbackPosts.map((p) => (
+                          <div className="feedback-row" key={p.id}>
+                            <div>
+                              <strong>
+                                {p.title || p.brief || "Untitled post"}
+                              </strong>
+                              <span>
+                                {label(p.hook)}
+                                <span>
+                                  {" "}
+                                  · {p.feedback?.window || "No observation"}
+                                </span>
+                              </span>
+                              {p.feedback &&
+                                p.feedback.source === "manual" &&
+                                p.feedback.timing_status !==
+                                  "window_matched" && (
+                                  <span className="timing-warning">
+                                    {p.feedback.timing_status ===
+                                    "out_of_window"
+                                      ? "Outside the measurement window"
+                                      : "Measurement time unverified"}{" "}
+                                    · excluded from learning
+                                  </span>
+                                )}
+                            </div>
+                            <span>
+                              {p.feedback?.impressions?.toLocaleString() ?? "—"}
+                            </span>
+                            <span>{p.feedback?.comments ?? "—"}</span>
+                            <span>{p.feedback?.reposts ?? "—"}</span>
+                            <span className="rate">
+                              {p.feedback?.impressions
+                                ? (
+                                    ((p.feedback.comments +
+                                      p.feedback.reposts) *
+                                      1000) /
+                                    p.feedback.impressions
+                                  ).toFixed(1)
+                                : "—"}
+                            </span>
+                            <Button
+                              kind="quiet"
+                              onClick={() =>
+                                setDialog({ type: "feedback", post: p })
+                              }
+                            >
+                              <PenLine size={13} />
+                              <span>{p.feedback ? "Edit" : "Add"}</span>
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <Empty
+                          icon={TrendingUp}
+                          title="No feedback in this view yet"
+                        >
+                          Import a published post or choose demo feedback to
+                          explore how learning works.
+                        </Empty>
+                      )}
+                    </div>
+                  </section>
+                  <section className="card evaluation-card">
+                    <div className="section-heading">
+                      <div className="section-title">
+                        <FlaskConical size={19} />
+                        <h2>Does the editor actually help?</h2>
+                      </div>
+                      <Badge>Self-evaluation</Badge>
+                    </div>
+                    <p>
+                      Blind comparisons of original and revised drafts, scored
+                      on brief fulfillment, specificity, clarity, and brand fit.
+                    </p>
+                    {data.evaluation &&
+                    Object.keys(data.evaluation).length > 0 ? (
+                      <EvaluationReport evaluation={data.evaluation} />
+                    ) : (
+                      <div className="evaluation-empty">
+                        <div>
+                          <strong>The evaluation harness is ready.</strong>
+                          <p>
+                            Run the evaluation script to measure improvement.
+                            Results will appear here when saved.
+                          </p>
+                        </div>
+                        <code>python scripts/evaluate.py</code>
+                      </div>
+                    )}
+                    <div className="evaluation-note">
+                      <CircleHelp size={14} />
+                      <span>
+                        Model judging is subjective. Demo fixtures validate the
+                        workflow; only live evaluation measures generated
+                        output.
+                      </span>
+                    </div>
+                  </section>
+                </>
+              )}
             </>
           )}
         </div>
@@ -2760,8 +2879,12 @@ function LearningChain({
         item.learning_snapshot_id === snapshot?.id && item.content && snapshot,
     )
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
-  const strategyReason = runs.find((run) => run.post_id === next?.id)?.strategy_reason;
-  const explores = next && snapshot?.preferred_hook &&
+  const strategyReason = runs.find(
+    (run) => run.post_id === next?.id,
+  )?.strategy_reason;
+  const explores =
+    next &&
+    snapshot?.preferred_hook &&
     next.hook !== snapshot.preferred_hook &&
     strategyReason?.toLowerCase().startsWith("exploration:");
   return (

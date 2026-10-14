@@ -2,6 +2,29 @@ export type Mode = "demo" | "live";
 export type Platform = "linkedin" | "newsletter";
 export type Source = "manual" | "simulated";
 export type Hook = "problem-first" | "outcome-first" | "question-first";
+export interface BriefContract {
+  min_words?: number | null;
+  max_words?: number | null;
+  max_characters?: number | null;
+  min_bullets?: number | null;
+  max_bullets?: number | null;
+  max_hashtags?: number | null;
+  required_sections?: string[];
+  plain_text?: boolean;
+}
+export interface ContractChecks {
+  passed: boolean | null;
+  checks: {
+    key: string;
+    label: string;
+    expected: unknown;
+    actual: unknown;
+    passed: boolean;
+  }[];
+  violations: string[];
+  content_sha256?: string;
+  scope?: string;
+}
 export interface BrandProfile {
   summary?: string;
   tone?: string[] | string;
@@ -58,6 +81,9 @@ export interface Post {
   title: string;
   content: string;
   platform?: Platform;
+  source_url?: string;
+  contract?: BriefContract;
+  contract_checks?: ContractChecks;
   original_draft?: string;
   review_stale?: boolean;
   image_stale?: boolean;

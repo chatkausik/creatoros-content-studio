@@ -18,12 +18,15 @@ The [90-second walkthrough](docs/demo.mp4) uses actual application screenshots a
 |---|---|
 | Four cooperating agents | Strategist, writer, editor, and visual agent have distinct prompts and named LangGraph steps |
 | Editorial refinement | Original text, concrete edit requests, revisions, and review history |
+| Brief contracts | Confirmed word, character, bullet, hashtag, section, and formatting rules; exact violations drive bounded repair and block approval |
 | Learned voice | A versioned profile extracted from multiple writing samples, with supporting quotes |
 | Human control | Saved manual edits, rechecks, stale-review indicators, and explicit acknowledgement of unresolved concerns |
 | Visual iteration | Matching images, regeneration feedback, retained variants, and renewed approval after changes |
 | Two content formats | LinkedIn posts and developed newsletters, with copy and export controls |
 | Persistent queue | Approved posts become ready when due; publication and confirmation are manual |
 | Evidence-based adaptation | Comparable observations, frozen learning snapshots, continued exploration, and actual subsequent openings |
+| Feedback import inbox | CSV upload/paste, column mapping, previewed changes, duplicate detection, immutable corrections, and atomic commits |
+| Experiment Lab | Preregistered hypotheses, balanced opening assignments, frozen analyses, and matched learning-on/off drafts |
 | Recoverable execution | Saved step artifacts, frozen run settings, failure diagnostics, and compatible retries |
 
 The scheduler does not publish to LinkedIn or send email. Platform analytics are entered manually. Authentication, multi-user isolation, and production hosting are outside this release.
@@ -66,12 +69,32 @@ For an empty workspace, set `CREATOROS_SEED_DEMO=false` and choose a new `CREATO
 ## Try the complete loop
 
 1. **Choose a voice.** Inspect the fictional Ada and Milo workspaces, or create a brand with at least three distinct writing samples. Live extraction creates a profile grounded in those samples.
-2. **Create and refine.** Choose LinkedIn or newsletter, enter a brief, follow agent progress, and compare the draft with its revision. Make a manual edit and request a fresh review; previous reviews remain in history.
+2. **Create and refine.** Choose LinkedIn or newsletter and enter a brief. Review suggested brief rules or enter them yourself, then follow agent progress and compare versions. Make a manual edit and request a fresh review; previous reviews remain in history.
 3. **Choose the visual.** Generate an image, provide regeneration feedback, or select a saved variant. Live regeneration is a new paid action. Retry of a saved failed request retains its request configuration and can reuse completed provider work.
 4. **Approve and queue.** Resolve or explicitly acknowledge outstanding concerns, then schedule the post. When it is ready, publish it yourself and confirm publication in the app. The scheduler runs while the backend is running and checks overdue items after restart.
-5. **Close the loop.** Enter engagement with its measurement time and observation window. Recompute learning, inspect the exact observations behind the snapshot, and generate another post to see the chosen opening in actual prose.
+5. **Close the loop.** Enter engagement or open **Learning → Feedback inbox** to import a CSV with measurement times and windows. Recompute learning, inspect its exact observations, and generate another post. Use **Experiment Lab** to plan the next deliberate comparison before its outcomes arrive.
 
-Generated LinkedIn drafts are validated as plain text up to **3,000 characters**. Generated newsletters require a subject, **400–700 words**, and at least three section headings; prompts also request a worked example, exercise, and trade-offs. Those semantic elements still need editorial review. Manual edits save a new version and make earlier checks stale; approval is a creator decision, not a guarantee that every brief constraint passed.
+Generated LinkedIn drafts are validated as plain text up to **3,000 characters**. Generated newsletters require a subject, **400–700 words**, and at least three section headings; prompts also request a worked example, exercise, and trade-offs. Those semantic elements still need editorial review. Manual edits save a new version and make earlier reviews stale. Explicit agreed contract failures block approval, even if other editorial concerns are acknowledged.
+
+### Brief contracts
+
+The composer can suggest simple numeric rules from the brief without calling AI. Suggestions are incomplete by design: review the editable fields, resolve ambiguous instructions, and confirm the intended limits before generating. The saved run freezes those rules. Required section names match whole lines, ignoring case, repeated spaces, and a trailing colon; word counts include headings and bullet markers and split on whitespace.
+
+Every draft, revision, and review retains its check results. A high editor score cannot override a deterministic failure. Live generation uses the remaining bounded revision attempts to repair it; unresolved rules stay visible and block approval. Demo mode uses authored text, reports its actual violations, and supports manual correction—it does not simulate a successful AI repair. Meaning, factual accuracy, and arbitrary prose instructions remain outside deterministic validation.
+
+### Feedback import inbox
+
+Download the CSV header template, paste or upload observations, and map custom column names. Match existing published posts by ID or a unique stored source URL in the selected brand/platform. The preview identifies new observations, corrections, unchanged rows, duplicates, invalid rows, and observations excluded from learning. Missing windows are treated as unknown, never silently inferred as 24-hour measurements.
+
+**Import valid rows** commits the reviewed valid observations and their revisions together. Invalid/duplicate rows are skipped and remain explained. Reimporting an identical observation does not increase its sample count. If relevant post or metric data changed after preview, the whole commit stops and requires a fresh preview. Cumulative or mistimed counts can be saved as reference data without entering the comparable learning cohort. No CSV import fetches data from a social platform.
+
+### Experiment Lab
+
+Register a hypothesis, platform, provenance, 24-hour/7-day window, and 1–10 slots per opening. The metric is fixed to comments plus reposts per 1,000 impressions. Opening assignments are randomized in balanced blocks and frozen alongside the voice profile and registration baseline. Each slot reserves one new draft; failures retain that run for recovery instead of permitting a favorable replacement. Manual cohorts require live drafts; simulated cohorts use demo drafts.
+
+Save an analysis to freeze the complete assignment list, included observations, exclusions, and descriptive ranges. An incomplete cohort stays inconclusive; even a complete cohort needs three posts and 300 impressions per opening before a separated range can produce a descriptive signal. Analyses do not automatically replace the active learning policy.
+
+Each experiment can also create one matched learning-off/on draft pair with the same brief, voice, contract, and model configuration. Both use the frozen registration baseline. If that baseline has no preference, the pair may select the same opening; the UI discloses that lack of contrast. These drafts are separate from the audience experiment's slots, and their comparison does not establish higher engagement.
 
 A fresh checkout contains only labeled demonstration data. The creator's working installation additionally has eight authentic, source-attributed LinkedIn samples, held privately under ignored `data/`. They are not bundled with the repo. Import your own samples through Brand or the [sample-import CLI](scripts/import_samples.py). Previously captured cumulative LinkedIn counts have unspecified windows and remain reference observations, excluded from 24-hour and 7-day learning cohorts.
 
@@ -132,15 +155,16 @@ The fresh benchmark uses **12 new authored briefs × two fictional voices = 24 p
 
 Both swapped outputs were identified as the opposite voice supplied. These small controlled checks show profile influence and feedback adaptation. They do **not** establish general voice fidelity, general writing improvement, or audience uplift. Quality means exclude unscored failures; completion denominators do not.
 
-The main measured weakness is brief-specific word/format compliance: high model scores coexisted with **15 failing final drafts**. Platform schemas enforce some limits, but the application does not yet turn arbitrary brief requirements into a structured, enforced contract. Factual-care scores are also model opinions, not external fact-checking.
+The historical benchmark's main measured weakness was brief-specific word/format compliance: high model scores coexisted with **15 failing final drafts**. It predates the new confirmed-contract workflow. New benchmark runs pass their explicit constraints into generation and record that configuration; the historical results are unchanged. Contract checks cover agreed mechanical rules, not all arbitrary instructions. Factual-care scores are also model opinions, not external fact-checking.
 
 - [Recovered report](evals/fresh-recovered/RESULTS.md), [raw cases](evals/fresh-recovered/results.json), and [CSV](evals/fresh-recovered/results.csv).
 - [Original first attempt](evals/fresh/RESULTS.md) and [Codex-assisted review of three pairs](evals/fresh/REVIEW.md), explicitly not independent human assessment.
 - [Scoped follow-up validation](evals/UPGRADE_VALIDATION.md): a 630-word newsletter, initial and regenerated Mesh images, and the previously failing strategy explanation. These checks preserve earlier failures and do not replace the benchmark.
+- [New brief-contract smoke check](evals/contracts-2026-10-14/RESULTS.md): 3/4 live runs completed and 2/4 final texts passed their agreed rules. Two examples demonstrate actual repair; an overlong draft and an editor-schema failure remained blocked for correction. This small check does not establish general compliance or quality improvement.
 - [Usage accounting](evals/fresh-recovered/USAGE.json): recorded tokens and known gaps; no invented dollar total or billing guarantee.
 - [Earlier eight-pair results](evals/RESULTS.md) and [historical experiments](evals/history/). Earlier four-dimension scores are not directly comparable to the fresh five-dimension rubric.
 
-The implementation at [commit `68ca3ae`](https://github.com/chatkausik/creatoros-content-studio/commit/68ca3ae6c5f535f0a9de9ef3877c54bb64b092a7) passed **151 regression tests**, the production build, eight fixture cases, and submission preflight in [GitHub CI](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38627531117). Fixture quality scores are intentionally null: deterministic examples test workflow mechanics.
+The current upgrade passed **265 regression tests**, the production build, and submission preflight locally. Browser checks covered contract approval blocking and manual repair, mapped imports and repeat-import deduplication, assigned experiment drafts, historical analyses, and matched pairs. All three views fit a 390-pixel viewport without horizontal overflow or console errors. The [project CI workflow](https://github.com/chatkausik/creatoros-content-studio/actions/workflows/tests.yml) also runs the eight-case fixture suite. Fixture quality scores are intentionally null: deterministic examples test workflow mechanics.
 
 ## Reproduce the checks
 
@@ -177,21 +201,20 @@ Transport-only recovery retries connection failures, timeouts, rate limits, and 
 
 The [test workflow](.github/workflows/tests.yml) runs without AI credentials. Preflight checks syntax, manifests, evaluation artifacts, configuration, and basic secret hygiene; it cannot certify a valid Mesh key or organizer eligibility. Python direct versions are recorded in `constraints.txt`; the frontend uses its committed npm lockfile.
 
+Preview the four-case contract check separately with `.venv/bin/python scripts/validate_contracts.py --plan-only --output data/evaluations/my-contract-check`. Without `--plan-only`, fixture mode runs deterministic examples and may correctly report failed rules. Add `--live` only to run new paid Mesh generations. Earlier reports are protected against overwrite.
+
 ## Next enhancements — proposed, not implemented
 
 Prioritize a stronger measured loop before adding more agents. Each proposal has a visible demonstration and an acceptance criterion.
 
 | Priority | Enhancement | User experience and acceptance criterion |
 |---|---|---|
-| 1 | **Brief contracts and targeted repair** | Turn word, bullet, hashtag, and required-section limits into an editable checklist frozen with the run. Show exact violations and repair within a bounded budget. A high judge score cannot silently erase a failed check; unresolved constraints stay visible at approval. |
-| 2 | **Real-feedback import inbox** | Preview a creator-supplied metrics file, map posts and measurement windows, and explain excluded rows. Importing the same file twice adds no observations; a correction adds a revision. Cumulative or mistimed counts remain excluded from learning. |
-| 3 | **Experiment Lab** | Freeze a hypothesis, metric, observation window, and hook assignments before results arrive. Compare matched drafts with learning enabled/disabled and show coverage gaps. Insufficient data stays inconclusive; assignments and all outcomes remain auditable. |
-| 4 | **Interactive evidence replay** | Let a judge step through a recorded brief → critique → revision → visual → feedback → next-opening chain without credentials. Each step links to its actual artifact. Recorded live outputs and fixtures are clearly labeled, with no claim of real-time execution. |
-| 5 | **Creator-approved style memory** | Propose voice preferences from accepted human edits, such as fewer rhetorical questions. Let the creator accept or reject each rule. The next draft cites the profile version used; reverting a rule leaves historical runs unchanged. |
-| 6 | **Source-backed claim cards** | Attach supplied source excerpts to factual claims and flag unsupported numbers or personal anecdotes. Preserve links through revision; changing a source invalidates its associated support. Source attribution remains distinct from truth verification. |
-| 7 | **Campaign composer** | Turn one idea into a connected LinkedIn post, newsletter, and visual with a shared message and calendar. Keep independent format checks and approvals; a changed core claim marks affected variants for review. Export the campaign for manual publishing. |
+| 1 | **Interactive evidence replay** | Let a judge step through a recorded brief → critique → revision → visual → feedback → next-opening chain without credentials. Each step links to its actual artifact. Recorded live outputs and fixtures are clearly labeled, with no claim of real-time execution. |
+| 2 | **Creator-approved style memory** | Propose voice preferences from accepted human edits, such as fewer rhetorical questions. Let the creator accept or reject each rule. The next draft cites the profile version used; reverting a rule leaves historical runs unchanged. |
+| 3 | **Source-backed claim cards** | Attach supplied source excerpts to factual claims and flag unsupported numbers or personal anecdotes. Preserve links through revision; changing a source invalidates its associated support. Source attribution remains distinct from truth verification. |
+| 4 | **Campaign composer** | Turn one idea into a connected LinkedIn post, newsletter, and visual with a shared message and calendar. Keep independent format checks and approvals; a changed core claim marks affected variants for review. Export the campaign for manual publishing. |
 
-Recommended sequence: **brief contracts → feedback import → Experiment Lab**, with evidence replay as parallel presentation work. These address the measured weakness and the challenge's highest-weighted feedback loop. Style memory, claim cards, and campaign composition broaden the product afterward. Automatic publishing and metric collection are later extensions requiring platform access; the import inbox does not depend on it. Any added AI processing must continue through Mesh.
+Brief contracts, feedback import, and Experiment Lab are now implemented above. Evidence replay is the next presentation improvement; style memory, claim cards, and campaign composition broaden the product afterward. Automatic publishing and metric collection remain extensions requiring platform access; the import inbox does not depend on it. Any added AI processing must continue through Mesh.
 
 ## Submission
 

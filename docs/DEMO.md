@@ -28,6 +28,10 @@ The displayed 90% ranges are descriptive post-level bootstrap ranges. They do no
 
 ## Additional close-ups
 
+- [Brief contract](screenshots/brief-contract.png): confirmed limits, actual word/bullet checks, and approval gating after a manual change. This is a fixture workflow, not live quality evidence.
+- [Feedback inbox](screenshots/feedback-inbox.png): mapped CSV observations, duplicates/invalid rows, timing exclusions, and a repeat preview that does not inflate metrics. All observations shown are simulated.
+- [Experiment Lab](screenshots/experiment-lab.png): nine preregistered assignments, inconclusive saved analyses, and matched learning-off/on fixture openings. These newer features are shown in stills; the existing 90-second video predates them.
+
 - [Manual editing](screenshots/manual-edit.png): a human revision saves a new version and clears its approval.
 - [Approval acknowledgement](screenshots/approval.png): unresolved editorial concerns require an explicit creator decision.
 - [Saved visuals](screenshots/visual-gallery.png): three preserved versions, their feedback and the selected visual. Demo regeneration can produce the same SVG composition; live image regeneration is a paid Mesh request.

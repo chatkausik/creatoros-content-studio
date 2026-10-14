@@ -26,11 +26,13 @@ def test_fixture_evaluation_is_unscored_and_ablations_are_matched(tmp_path, monk
     assert result["summary"]["changed_pairs"] == 8
     assert result["summary"]["scored_pairs"] == 0
     assert result["summary"]["mean_delta"] is None
+    assert result["config"]["brief_contracts_enforced"] is True
     assert all(case["scores"] is None for case in result["cases"])
     for pair in result["ablations"]:
         baseline, learned = pair["baseline_run"], pair["learned_run"]
         assert baseline["profile"] == learned["profile"]
         assert baseline["brief"] == learned["brief"]
+        assert baseline["contract"] == learned["contract"]
         assert baseline["feedback_source"] == learned["feedback_source"] == "simulated"
         assert baseline["window"] == learned["window"] == "24h"
         assert baseline["use_learning"] is False
@@ -39,6 +41,69 @@ def test_fixture_evaluation_is_unscored_and_ablations_are_matched(tmp_path, monk
         assert learned["learning_snapshot_id"] is not None
         assert pair["baseline_hook"] == "problem-first"
         assert pair["learned_hook"] == "outcome-first"
+
+
+def test_fresh_fixture_freezes_canonical_constraints_without_manufacturing_quality_scores(tmp_path, monkeypatch):
+    from backend.creatoros.config import Settings
+    from backend.creatoros.contracts import validate_contract
+    import backend.creatoros.config as config
+    from backend.creatoros.mesh import MeshClient
+    import scripts.evaluate as evaluation
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private", worker_enabled=False))
+    # Exercise a constrained brief in both feedback branches, without changing
+    # the repository's immutable benchmark manifest or historical reports.
+    manifest = json.loads((evaluation.ROOT / "evals/cases.json").read_text())
+    manifest["feedback_ablation_briefs"] = ["fresh-privacy"]
+    manifest_root = tmp_path / "manifest"
+    (manifest_root / "evals").mkdir(parents=True)
+    (manifest_root / "evals/cases.json").write_text(json.dumps(manifest))
+    monkeypatch.setattr(evaluation, "ROOT", manifest_root)
+
+    async def reject_ai(*args, **kwargs):
+        raise AssertionError("Contract fixture evaluation must not call AI")
+
+    monkeypatch.setattr(MeshClient, "complete_json", reject_ai)
+    monkeypatch.setattr(MeshClient, "generate_image", reject_ai)
+    output = tmp_path / "fresh-contracts"
+    code = asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                                                  suite="fresh", case_limit=2)))
+    result = json.loads((output / "results.json").read_text())
+    assert code == 0
+    assert result["config"]["brief_contracts_enforced"] is True
+    assert result["summary"]["scored_pairs"] == 0
+    assert result["summary"]["mean_before"] is result["summary"]["mean_after"] is None
+    for case in result["cases"]:
+        expected = validate_contract(case["constraints"], case["platform"])
+        assert case["run"]["contract"] == case["post"]["contract"] == expected
+        assert case["run"]["contract"]["max_words"] == 150
+        assert case["scores"] is None
+        assert case["before"] and case["after"]
+        assert case["constraints_before"]["passed"] is not None
+        assert case["constraints_after"]["passed"] is not None
+        assert case["post"]["reviews"][0]["contract_checks"]
+    ablation = result["ablations"][0]
+    assert ablation["baseline_run"]["contract"] == ablation["learned_run"]["contract"] == result["cases"][0]["run"]["contract"]
+    assert "not a guarantee that every final draft passes" in (output / "RESULTS.md").read_text()
+
+
+def test_saved_report_without_enforcement_metadata_remains_explicitly_unknown(tmp_path, monkeypatch):
+    from backend.creatoros.config import Settings
+    import backend.creatoros.config as config
+    from scripts.evaluate import write_results
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private", worker_enabled=False))
+    output = tmp_path / "report"
+    asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                                          suite="fresh", case_limit=1, skip_ablations=True)))
+    result = json.loads((output / "results.json").read_text())
+    result["config"].pop("brief_contracts_enforced")
+    original = copy.deepcopy(result)
+    write_results(result, tmp_path / "historical-render")
+    assert result == original
+    restored = json.loads((tmp_path / "historical-render/results.json").read_text())
+    assert "brief_contracts_enforced" not in restored["config"]
+    assert "enforcement was not recorded" in (tmp_path / "historical-render/RESULTS.md").read_text()
 
 
 def test_judge_unblinds_both_candidate_orders():
