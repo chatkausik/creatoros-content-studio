@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "provenance": "Held-out synthetic briefs and demonstration brands. These are evaluation fixtures, not the user's posts or audience performance.",
+  "profiles": [
+    {"brand_id": "brand-ada", "label": "Ada · precise technical teacher"},
+    {"brand_id": "brand-milo", "label": "Milo · warm conversational builder"}
+  ],
+  "briefs": [
+    {
+      "id": "eval-retrieval",
+      "brief": "Write a LinkedIn post for engineers explaining why a retrieval system needs an evaluation set before another prompt tweak. Include one practical first step and a concrete failure to inspect. Do not claim measured improvements or invent personal experience.",
+      "topic": "Retrieval evaluation before prompt tuning"
+    },
+    {
+      "id": "eval-safety",
+      "brief": "Write a LinkedIn post for product builders about adding human approval before an AI agent performs an irreversible action. Explain a concrete example and one implementation step. Avoid fearmongering and invented statistics.",
+      "topic": "Human approval for irreversible agent actions"
+    },
+    {
+      "id": "eval-observability",
+      "brief": "Write a LinkedIn post for small engineering teams about recording tool inputs, outputs, and failures when debugging an AI workflow. Give a specific debugging example and a small change a team can make today. Do not invent customer outcomes.",
+      "topic": "Observable tool calls in AI workflows"
+    },
+    {
+      "id": "eval-feedback",
+      "brief": "Write a LinkedIn post for technical creators explaining why impressions alone cannot tell them which content was useful. Recommend an explicit metric and a consistent observation window, and mention one limitation of comparing a few posts. Do not claim causation from engagement.",
+      "topic": "Learning carefully from audience feedback"
+    }
+  ],
+  "feedback_ablation_briefs": ["eval-safety", "eval-feedback"]
+}

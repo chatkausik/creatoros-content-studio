@@ -1,0 +1,48 @@
+name: CreatorOS Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: creatoros-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-behavior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MESH_API_KEY: ""
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            constraints.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt -c constraints.txt
+      - name: Install and build the frontend
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+      - name: Test domain, API, agent recovery, and evaluation behavior
+        run: python -m pytest -q
+      - name: Reproduce fixture checks without touching committed live results
+        run: python scripts/evaluate.py --output "$RUNNER_TEMP/creatoros-fixture-evaluation"
+      - name: Check the local submission package
+        run: python scripts/check_submission.py

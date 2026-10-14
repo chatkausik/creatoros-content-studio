@@ -1,0 +1,14 @@
+# Direct dependency versions exercised by the local application and test suite.
+# This constrains direct packages; transitive dependencies still resolve normally.
+fastapi==0.136.0
+uvicorn==0.38.0
+sqlalchemy==2.0.52
+pydantic==2.12.5
+python-dotenv==1.2.1
+openai==2.54.0
+httpx==0.28.1
+langgraph==1.2.11
+langgraph-checkpoint-sqlite==3.1.2
+aiosqlite==0.22.1
+pytest==8.4.2
+pytest-asyncio==1.3.0

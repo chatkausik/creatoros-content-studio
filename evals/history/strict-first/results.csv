@@ -1,0 +1,9 @@
+case_id,brand_id,source,changed,mean_before,mean_after,delta,error
+eval-retrieval-brand-ada,brand-ada,mesh,True,4.5,4.5,0.0,
+eval-safety-brand-ada,brand-ada,,,,,,RuntimeError: Run 4c8530c8-25f0-4ecf-9a06-7f72c05d2ab5 failed: Mesh returned invalid structured output twice. The failed step can be retried.
+eval-observability-brand-ada,brand-ada,mesh,True,4.5,4.5,0.0,
+eval-feedback-brand-ada,brand-ada,mesh,True,4.75,5,0.25,
+eval-retrieval-brand-milo,brand-milo,mesh,True,4.5,5,0.5,
+eval-safety-brand-milo,brand-milo,,,,,,RuntimeError: Run c8cb820b-9072-4bee-a218-80a74e3969d7 failed: Mesh returned invalid structured output twice. The failed step can be retried.
+eval-observability-brand-milo,brand-milo,,,,,,RuntimeError: Run a5d909bb-519d-4803-a674-502f71981094 failed: Mesh returned invalid structured output twice. The failed step can be retried.
+eval-feedback-brand-milo,brand-milo,,,,,,RuntimeError: Run 8ff0c989-2713-4099-8dc9-f13fcc658f3e failed: Mesh returned invalid structured output twice. The failed step can be retried.
