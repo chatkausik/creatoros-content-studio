@@ -1,6 +1,7 @@
 """Guard honest scoring and the controlled feedback comparison."""
 import argparse
 import asyncio
+import copy
 import json
 import random
 
@@ -155,3 +156,159 @@ def test_opening_classifier_rejects_a_nonverbatim_sentence():
 
     with pytest.raises(ValueError, match="exactly"):
         asyncio.run(classify_openings(BadQuoteJudge(), "A real opening.", "Another real opening.", random.Random(2026)))
+
+
+def test_recovery_reuses_frozen_artifacts_and_only_retries_failed_operations(tmp_path, monkeypatch):
+    import backend.creatoros.config as config
+    import backend.creatoros.pipeline as pipeline
+    import backend.creatoros.service as service
+    from backend.creatoros.config import Settings
+    from backend.creatoros.mesh import MeshClient
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private", worker_enabled=False))
+    real_pipeline, real_review = pipeline.run_pipeline, pipeline._demo_review
+    active = {"index": -1}
+
+    def fail_selected_editor(iteration):
+        # Fail before the first review, after a saved revision, and in one ablation branch.
+        if {0: 0, 1: 1, 10: 0}.get(active["index"]) == iteration:
+            raise RuntimeError("Forced validation failure")
+        return real_review(iteration)
+
+    async def first_attempt(run_id, store, settings):
+        active["index"] += 1
+        await real_pipeline(run_id, store, settings)
+
+    async def reject_ai(*args, **kwargs):
+        raise AssertionError("Fixture recovery must never call AI")
+
+    monkeypatch.setattr(MeshClient, "complete_json", reject_ai)
+    monkeypatch.setattr(MeshClient, "generate_image", reject_ai)
+    monkeypatch.setattr(pipeline, "_demo_review", fail_selected_editor)
+    monkeypatch.setattr(pipeline, "run_pipeline", first_attempt)
+    initial_dir = tmp_path / "initial"
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=initial_dir, seed=2026))) == 1
+    initial_path = initial_dir / "results.json"
+    source = json.loads(initial_path.read_text())
+    assert source["summary"]["completed_pairs"] == 6
+    assert set(source["ablations"][1]["branch_errors"]) == {"baseline"}
+    # Semantic failures must also be retained, not retried until a passing answer appears.
+    source["ablations"][0].update(passed=False, opening_compliance=False)
+    source["learning_checks"][1]["passed"] = False
+    initial_path.write_text(json.dumps(source))
+    source_bytes = initial_path.read_bytes()
+    expected_runs = {source["cases"][0]["run"]["id"], source["cases"][1]["run"]["id"],
+                     source["ablations"][1]["baseline_run"]["id"]}
+    retried = []
+
+    async def recovered(run_id, store, settings):
+        assert run_id in expected_runs
+        assert not (settings.data_dir / "checkpoints.sqlite").exists()
+        retried.append(run_id)
+        frozen = store.get("runs", run_id)
+        writer = copy.deepcopy(frozen["artifacts"]["writer"])
+        profile = copy.deepcopy(frozen["profile"])
+        await real_pipeline(run_id, store, settings)
+        after = store.get("runs", run_id)
+        assert after["artifacts"]["writer"] == writer
+        assert after["profile"] == profile
+        assert after["selected_hook"] == frozen["selected_hook"]
+
+    def reject_new_run(*args, **kwargs):
+        raise AssertionError("Recovery must preserve original run IDs and frozen decisions")
+
+    monkeypatch.setattr(pipeline, "_demo_review", real_review)
+    monkeypatch.setattr(pipeline, "run_pipeline", recovered)
+    monkeypatch.setattr(service, "create_run", reject_new_run)
+    final_dir = tmp_path / "recovered"
+    # Exit remains nonzero because a completed semantic ablation failure is not hidden.
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=final_dir, seed=2026,
+                                                   resume_results=initial_path))) == 1
+    result = json.loads((final_dir / "results.json").read_text())
+    assert initial_path.read_bytes() == source_bytes
+    assert set(retried) == expected_runs and len(retried) == 3
+    assert result["summary"]["completed_pairs"] == 8
+    assert result["summary"]["mechanical_failures"] == 0
+    assert result["recovery"]["initial_summary"] == source["summary"]
+    assert result["recovery"]["initial_learning_checks"] == source["learning_checks"]
+    for old, new in zip(source["cases"], result["cases"]):
+        if old.get("error"):
+            assert new["prior_attempts"] == [old]
+            assert new["before"] == old["before"]
+            assert new["run"]["id"] == old["run"]["id"]
+            assert "error" not in new
+        else:
+            assert new == old
+    assert result["ablations"][0] == source["ablations"][0]
+    recovered_ablation = result["ablations"][1]
+    assert recovered_ablation["passed"]
+    assert recovered_ablation["prior_attempts"] == [source["ablations"][1]]
+    assert recovered_ablation["learned"] == source["ablations"][1]["learned"]
+    assert recovered_ablation["learned_run"] == source["ablations"][1]["learned_run"]
+    assert "not an all-successful first pass" in (final_dir / "RESULTS.md").read_text()
+
+
+def test_recovery_rejects_configuration_changes_before_running(tmp_path, monkeypatch):
+    from backend.creatoros.config import Settings
+    import backend.creatoros.config as config
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private"))
+    source_path = tmp_path / "source.json"
+    source_path.write_text(json.dumps({"mode": "live", "config": {}}))
+    with pytest.raises(ValueError, match="mode must match"):
+        asyncio.run(evaluate(argparse.Namespace(live=False, output=tmp_path, seed=2026, resume_results=source_path)))
+    source_path.write_text(json.dumps({"mode": "fixture", "config": {"model": "changed-model"}}))
+    with pytest.raises(ValueError, match="changed model"):
+        asyncio.run(evaluate(argparse.Namespace(live=False, output=tmp_path, seed=2026, resume_results=source_path)))
+
+
+def test_recovery_retries_only_missing_judgment_and_preserves_saved_scores(tmp_path, monkeypatch):
+    from backend.creatoros.config import Settings
+    import backend.creatoros.config as config
+    import backend.creatoros.pipeline as pipeline
+    import backend.creatoros.mesh as mesh
+    import scripts.evaluate as evaluator
+
+    settings = Settings(data_dir=tmp_path / "private", mesh_api_key="unit-test-not-a-key")
+    monkeypatch.setattr(config, "load_settings", lambda: settings)
+    initial_dir = tmp_path / "initial"
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=initial_dir, seed=2026))) == 0
+    source_path = initial_dir / "results.json"
+    source = json.loads(source_path.read_text())
+    # A mocked live report tests judge recovery without any provider requests.
+    source["mode"] = source["status"] = "live"
+    source["config"].update(model=settings.chat_model, judge_prompt=evaluator.JUDGE_PROMPT,
+                            opening_judge_prompt=evaluator.OPENING_PROMPT)
+    scores = {name: 4 for name in evaluator.DIMENSIONS}
+    saved_score = {"before": scores, "after": scores, "mean_before": 4, "mean_after": 4, "delta": 0}
+    for case in source["cases"]:
+        case["scores"] = copy.deepcopy(saved_score)
+    source["cases"][0].update(scores=None, error="MeshError: mocked judge timeout", evaluation_stage="quality_judging")
+    source["summary"] = summarize(source["cases"])
+    source_path.write_text(json.dumps(source))
+    judged = []
+
+    async def fake_judge(client, brief, profile, before, after, rng):
+        judged.append((brief, before, after))
+        return copy.deepcopy(saved_score)
+
+    async def reject_generation(*args, **kwargs):
+        raise AssertionError("Completed generation must not be repeated for a judging failure")
+
+    class NoNetworkClient:
+        def __init__(self, settings):
+            self.usage = []
+
+    monkeypatch.setattr(mesh, "MeshClient", NoNetworkClient)
+    monkeypatch.setattr(pipeline, "run_pipeline", reject_generation)
+    monkeypatch.setattr(evaluator, "judge_pair", fake_judge)
+    output = tmp_path / "recovered"
+    assert asyncio.run(evaluate(argparse.Namespace(live=True, output=output, seed=2026, resume_results=source_path))) == 0
+    result = json.loads((output / "results.json").read_text())
+    assert len(judged) == 1
+    assert result["cases"][1:] == source["cases"][1:]
+    assert result["ablations"] == source["ablations"]
+    assert result["cases"][0]["run"] == source["cases"][0]["run"]
+    assert result["cases"][0]["before"] == source["cases"][0]["before"]
+    assert result["cases"][0]["prior_attempts"] == [source["cases"][0]]
+    assert result["summary"]["scored_pairs"] == 8

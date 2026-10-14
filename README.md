@@ -94,6 +94,8 @@ Every learning update creates a versioned snapshot with rates, sample sizes, evi
 
 The evaluation corpus contains **four held-out briefs × two demonstration voice profiles = eight pairs**, plus two feedback ablations and a deterministic policy-reversal check.
 
+**Current recorded result (GPT-5.1 through Mesh):** 8/8 pairs completed after recovery, with mean scores **4.562 → 4.938 / 5**, **6 wins, 1 tie, and 1 regression**. Both blinded opening ablations and the feedback-reversal check passed. First-attempt completion was **4/8**; the report preserves those failures and the subsequent recovery. These are model-judged synthetic cases, not audience-engagement gains. See the [qualitative spot review](evals/REVIEW.md) for weaknesses the scores understate.
+
 Run the reproducible, free fixture checks into a separate output directory:
 
 ```sh
@@ -103,7 +105,7 @@ Run the reproducible, free fixture checks into a separate output directory:
 Run live generation and a separate, blinded Mesh judge (uses API credits):
 
 ```sh
-.venv/bin/python scripts/evaluate.py --live
+MESH_CHAT_MODEL=openai/gpt-5.1 .venv/bin/python scripts/evaluate.py --live
 ```
 
 The live judge scores **brief fulfillment, specificity, clarity, and brand fit** from 1–5. Candidate order is randomized with a fixed seed and original/revision labels are hidden. A separate blinded call classifies only each ablation's first visible sentence, retaining the exact sentence and its rationale. A metadata change alone cannot pass this live opening check.
@@ -113,6 +115,17 @@ Reports include completion rate, every case, paired deltas, wins, ties, losses, 
 **Recorded numbers and their provenance:** [evals/RESULTS.md](evals/RESULTS.md), [raw results](evals/results.json), and [CSV](evals/results.csv). Fixture results report mechanics such as changed drafts; their quality scores are deliberately null. The script never manufactures scores when a live request fails. A fixture pass is not evidence that AI writing quality improved.
 
 The [initial eight-pair live benchmark](evals/history/initial/RESULTS.md) scored **4.469 → 4.906 / 5**, with **7 wins, 1 tie, and 0 losses**. A stricter follow-up exposed generation failures and weaknesses in opening classification; [that report is preserved too](evals/history/strict-first/RESULTS.md). The initial score does not certify the corrected build. Use the current primary report above to assess completion and the stricter checks, including any unresolved failures.
+
+The [diagnostic mini-model run](evals/history/diagnostic-mini/RESULTS.md) retained three scored regressions and three generation failures. The [production model's first attempt](evals/history/production-first/RESULTS.md) completed four of eight pairs; the other four hit an unnecessarily restrictive 500-character limit on evidence notes. The limit now allows 1,200 characters while preserving content and rubric validation. These experiments changed model or validation configuration and are not a controlled comparison between model families.
+
+Operational failures can be resumed from their frozen inputs and completed artifacts, without rerolling successful drafts or judgments:
+
+```sh
+MESH_CHAT_MODEL=openai/gpt-5.1 .venv/bin/python scripts/evaluate.py --live \
+  --resume-results evals/history/production-first/results.json --output evals
+```
+
+Recovered reports retain first-attempt completion, previous errors, and separate recovery accounting. A completed but unsuccessful quality or opening comparison is retained as evidence, not retried until it passes.
 
 The benchmark is small and synthetic, model judging is subjective, and engagement is not a causal experiment. Review at least two pairs manually before presenting live quality claims. Record disagreements and retain regressions.
 

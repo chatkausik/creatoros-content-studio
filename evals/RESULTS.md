@@ -1,41 +1,42 @@
 # CreatorOS evaluation results
 
-Generated: 2026-10-14T02:43:30.504208+00:00
+Generated: 2026-10-14T02:48:49.052071+00:00
 
 Mode: **live**. Held-out synthetic briefs and demonstration brands. These are evaluation fixtures, not the user's posts or audience performance.
 
-- Completed pairs: 5/8 (62.5%)
+- Completed pairs: 8/8 (100.0%)
 - Text changed: 8/8
 - Pairs passing all mechanical checks: 8/8
-- Independently judged pairs: 5
-- Mean score among successfully judged pairs: 4.7 before → 4.5 after (1–5)
-- Mean paired change: -0.200
-- Wins / ties / losses: 2 / 0 / 3
-- Score coverage: 5/8. Quality means are conditional on successful generation and judging; failed cases are not assigned zero or silently dropped from completion counts.
+- Independently judged pairs: 8
+- Mean score among successfully judged pairs: 4.562 before → 4.938 after (1–5)
+- Mean paired change: +0.375
+- Wins / ties / losses: 6 / 1 / 1
+- Score coverage: 8/8. Quality means are conditional on successful generation and judging; failed cases are not assigned zero or silently dropped from completion counts.
+
+## Recovery accounting
+
+This is a recovered evaluation, not an all-successful first pass. Successful cases and their existing judgments were retained unchanged; only failed operations were retried from frozen saved artifacts.
+
+- Initial completion: 4/8 (50.0%)
+- Completion after recovery: 8/8 (100.0%)
+- Recovery attempts recorded: 1
+- Original failures and sanitized diagnostics remain in each recovered item's `prior_attempts`; the initial summary and learning checks remain in `recovery`.
 
 | Case | Brand | Changed | Before | After | Change |
 |---|---|---|---:|---:|---:|
-| eval-retrieval-brand-ada | brand-ada | True | — | — | — |
-| eval-safety-brand-ada | brand-ada | True | 5 | 4 | -1 |
-| eval-observability-brand-ada | brand-ada | True | — | — | — |
-| eval-feedback-brand-ada | brand-ada | True | — | — | — |
-| eval-retrieval-brand-milo | brand-milo | True | 4.75 | 4.25 | -0.5 |
-| eval-safety-brand-milo | brand-milo | True | 4.5 | 4.25 | -0.25 |
-| eval-observability-brand-milo | brand-milo | True | 4.75 | 5 | 0.25 |
-| eval-feedback-brand-milo | brand-milo | True | 4.5 | 5 | 0.5 |
-
-## Failed cases
-
-Failed runs, partial drafts, and sanitized diagnostics are retained in `results.json`.
-
-- eval-retrieval-brand-ada — editor_review_1: GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
-- eval-observability-brand-ada — editor_review_1: GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
-- eval-feedback-brand-ada — editor_review_1: GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
+| eval-retrieval-brand-ada | brand-ada | True | 4.25 | 5 | 0.75 |
+| eval-safety-brand-ada | brand-ada | True | 4.5 | 5 | 0.5 |
+| eval-observability-brand-ada | brand-ada | True | 4.75 | 5 | 0.25 |
+| eval-feedback-brand-ada | brand-ada | True | 4.5 | 5 | 0.5 |
+| eval-retrieval-brand-milo | brand-milo | True | 4.25 | 4.75 | 0.5 |
+| eval-safety-brand-milo | brand-milo | True | 5 | 4.75 | -0.25 |
+| eval-observability-brand-milo | brand-milo | True | 4.25 | 5 | 0.75 |
+| eval-feedback-brand-milo | brand-milo | True | 5 | 5 | 0 |
 
 ## Learning checks
 
 - feedback-reversal: PASS — Reversing supplied engagement changes the preferred hook; this tests policy behavior, not engagement causality.
-- ablation-eval-safety: FAIL — Matched brief and voice with feedback disabled/enabled. A separate blinded classifier receives only the actual opening sentences and must identify both selected hooks; fixture runs test policy wiring only.
+- ablation-eval-safety: PASS — Matched brief and voice with feedback disabled/enabled. A separate blinded classifier receives only the actual opening sentences and must identify both selected hooks; fixture runs test policy wiring only.
 - ablation-eval-feedback: PASS — Matched brief and voice with feedback disabled/enabled. A separate blinded classifier receives only the actual opening sentences and must identify both selected hooks; fixture runs test policy wiring only.
 
 ## Limitations

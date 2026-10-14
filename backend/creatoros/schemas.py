@@ -90,12 +90,17 @@ class RefinementReview(Review):
 
 class VisualBrief(AgentOutput):
     image_prompt: str = Field(min_length=50, max_length=2000)
-    reason: str = Field(min_length=10, max_length=500)
+    reason: str = Field(min_length=10, max_length=1200)
 
     @field_validator("image_prompt")
     @classmethod
     def prohibit_literal_text_instructions(cls, prompt: str) -> str:
-        literal_text = r"\b(?:label(?:ed|led)|captioned|inscribed|spelling)\b|\b(?:text|words?|letters?|title|caption|label)\s+(?:reading|saying|that\s+(?:reads|says)|of)\b"
-        if re.search(literal_text, prompt, re.IGNORECASE):
+        # Labels made only of icons are visual organization, not typography.
+        # Remove that explicit safe construction before looking for instructions
+        # that put readable words onto documents, screens, or other objects.
+        icon_only = r"\blabel(?:ed|led)\s+(?:only\s+)?(?:by|with|using)\s+(?:simple\s+)?(?:icons?|symbols?|shapes?)(?:\s+only)?(?:\s*\(no\s+text\))?"
+        checked = re.sub(icon_only, "", prompt, flags=re.IGNORECASE)
+        literal_text = r'''\b(?:label(?:ed|led)|captioned|inscribed|spelling)\b|\b(?:text|words?|letters?|title|caption|label)\s+(?:reading|saying|that\s+(?:reads|says)|of)\b|\b(?:text|words?|letters?|title|caption|label)\s*(?:[:=]\s*)?["“‘']'''
+        if re.search(literal_text, checked, re.IGNORECASE):
             raise ValueError("The image must contain no readable text. Remove instructions for labeled objects, captions, inscriptions or quoted words; communicate the idea with unmarked shapes instead.")
         return prompt

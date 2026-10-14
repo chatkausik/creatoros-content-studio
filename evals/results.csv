@@ -1,9 +1,9 @@
 case_id,brand_id,source,changed,mean_before,mean_after,delta,error
-eval-retrieval-brand-ada,brand-ada,mesh,True,,,,GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
-eval-safety-brand-ada,brand-ada,mesh,True,5,4,-1,
-eval-observability-brand-ada,brand-ada,mesh,True,,,,GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
-eval-feedback-brand-ada,brand-ada,mesh,True,,,,GenerationFailure: Mesh returned invalid structured output twice (RefinementReview). The failed step can be retried.
-eval-retrieval-brand-milo,brand-milo,mesh,True,4.75,4.25,-0.5,
-eval-safety-brand-milo,brand-milo,mesh,True,4.5,4.25,-0.25,
-eval-observability-brand-milo,brand-milo,mesh,True,4.75,5,0.25,
-eval-feedback-brand-milo,brand-milo,mesh,True,4.5,5,0.5,
+eval-retrieval-brand-ada,brand-ada,mesh,True,4.25,5,0.75,
+eval-safety-brand-ada,brand-ada,mesh,True,4.5,5,0.5,
+eval-observability-brand-ada,brand-ada,mesh,True,4.75,5,0.25,
+eval-feedback-brand-ada,brand-ada,mesh,True,4.5,5,0.5,
+eval-retrieval-brand-milo,brand-milo,mesh,True,4.25,4.75,0.5,
+eval-safety-brand-milo,brand-milo,mesh,True,5,4.75,-0.25,
+eval-observability-brand-milo,brand-milo,mesh,True,4.25,5,0.75,
+eval-feedback-brand-milo,brand-milo,mesh,True,5,5,0,

@@ -1,6 +1,10 @@
 # Submission evidence and final handoff
 
-The challenge's source requirements are in [requirement.md](../requirement.md). The repository contains the implementation and evidence listed below. A public repository, configured GitHub secrets, and an eligible remote check result must still be verified at the submission destination.
+The challenge's source requirements are in [requirement.md](../requirement.md). The public repository is [chatkausik/creatoros-content-studio](https://github.com/chatkausik/creatoros-content-studio). Both required Actions secret names are configured, and the project's build/regression workflow has passed.
+
+**Registration blocker:** the organizer rejected the supplied `SUBMISSION_TOKEN` with HTTP 404, `token_unknown`: “This SUBMISSION_TOKEN does not match any registration.” Replace it with the token from the Agent Arena 2026 registration, update that repository secret, and rerun the organizer workflow. [Failed organizer run](https://github.com/chatkausik/creatoros-content-studio/actions/runs/38503305549). Eligibility is not claimed while this remains unresolved.
+
+The final live report scores all eight pairs after artifact recovery, preserves the original four first-attempt failures, and passes both actual-opening ablations. Read the [qualitative review](../evals/REVIEW.md) alongside the numbers.
 
 | Requirement | Implemented evidence |
 |---|---|

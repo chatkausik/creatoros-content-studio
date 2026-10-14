@@ -2245,9 +2245,21 @@ function EvaluationReport({
       : cases.filter((item) => item.error).length;
   const isLive = evaluation.mode === "live";
   const incomplete = isLive && scoredPairs < totalPairs;
+  const recovery = evaluation.recovery;
+  const initialSummary = recovery?.initial_summary;
+  const completedPairs =
+    typeof summary.completed_pairs === "number"
+      ? summary.completed_pairs
+      : totalPairs - errorCount;
+  const recoveredPairs = initialSummary
+    ? Math.max(0, completedPairs - initialSummary.completed_pairs)
+    : 0;
   const metrics = [
-    ["Scored / attempted", `${scoredPairs} / ${totalPairs}`],
-    ["Failed cases", errorCount],
+    [
+      recovery ? "Scored / attempted · after recovery" : "Scored / attempted",
+      `${scoredPairs} / ${totalPairs}`,
+    ],
+    [recovery ? "Still failed" : "Failed cases", errorCount],
     ["Mean first · scored only", summary.mean_before],
     ["Mean refined · scored only", summary.mean_after],
     ["Mean change · scored only", summary.mean_delta],
@@ -2268,11 +2280,13 @@ function EvaluationReport({
   return (
     <>
       <div className="evaluation-meta">
-        <Badge tone={isLive && !incomplete ? "green" : "amber"}>
+        <Badge tone={isLive && !incomplete && !recovery ? "green" : "amber"}>
           {isLive
-            ? incomplete
-              ? "Live Mesh evaluation · incomplete"
-              : "Live Mesh evaluation"
+            ? recovery
+              ? "Live Mesh evaluation · after recovery"
+              : incomplete
+                ? "Live Mesh evaluation · incomplete"
+                : "Live Mesh evaluation"
             : "Fixture mechanics · quality unmeasured"}
         </Badge>
         {!!evaluation.generated_at && (
@@ -2281,6 +2295,23 @@ function EvaluationReport({
           </span>
         )}
       </div>
+      {initialSummary && (
+        <div className="evaluation-recovery" role="status">
+          <History size={15} />
+          <span>
+            <strong>
+              First pass: {initialSummary.completed_pairs}/
+              {initialSummary.pairs} completed; {initialSummary.errors} failed.
+            </strong>{" "}
+            {recoveredPairs} additional{" "}
+            {recoveredPairs === 1 ? "pair" : "pairs"} completed through
+            recovery; final completion is {completedPairs}/{totalPairs}.
+            Successful cases and judgments were retained. The quality means
+            below include scored recovered cases; original failures remain in
+            the saved report.
+          </span>
+        </div>
+      )}
       {isLive && (
         <div
           className={`evaluation-completion ${incomplete ? "incomplete" : ""}`}
@@ -2289,12 +2320,16 @@ function EvaluationReport({
           <CircleHelp size={15} />
           <span>
             <strong>
-              {scoredPairs} of {totalPairs} pairs scored; {errorCount} failed.
+              {scoredPairs} of {totalPairs} pairs scored
+              {recovery ? " after recovery" : ""}; {errorCount}{" "}
+              {recovery ? "still failed" : "failed"}.
             </strong>{" "}
             Quality means and win/tie/loss counts include only scored pairs.{" "}
             {incomplete
               ? "Unscored and failed cases are excluded, so this is a partial result."
-              : "All attempted pairs are represented in these quality scores."}
+              : recovery
+                ? "Completion after recovery does not measure first-pass reliability."
+                : "All attempted pairs are represented in these quality scores."}
           </span>
         </div>
       )}
@@ -2346,7 +2381,7 @@ function EvaluationReport({
                     <span>{String(item.id || `Case ${i + 1}`)}</span>
                     <span>
                       {score
-                        ? `${score.mean_before?.toFixed(2)} → ${score.mean_after?.toFixed(2)}`
+                        ? `${Array.isArray(item.prior_attempts) && item.prior_attempts.length ? "Recovered · " : ""}${score.mean_before?.toFixed(2)} → ${score.mean_after?.toFixed(2)}`
                         : item.error
                           ? "Failed · unscored"
                           : isLive

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import csv
 import dataclasses
 import difflib
@@ -223,7 +224,6 @@ async def judge_pair(client: Any, brief: str, profile: dict, before: str, after:
 
 async def generate(store: Any, settings: Any, brand_id: str, brief: str,
                    *, learning_enabled: bool = True) -> tuple[dict, dict]:
-    from backend.creatoros.pipeline import run_pipeline
     from backend.creatoros.service import create_run
 
     run = create_run(store, settings, {
@@ -232,6 +232,13 @@ async def generate(store: Any, settings: Any, brand_id: str, brief: str,
         "feedback_source": "simulated", "window": "24h",
         "mode": "demo" if settings.demo_mode else "live",
     })
+    return await execute_run(store, settings, run)
+
+
+async def execute_run(store: Any, settings: Any, run: dict) -> tuple[dict, dict]:
+    """Execute an existing frozen run without choosing another profile or hook."""
+    from backend.creatoros.pipeline import run_pipeline
+
     try:
         await run_pipeline(run["id"], store, settings)
     except Exception as exc:
@@ -337,6 +344,15 @@ def write_results(result: dict, output: Path) -> None:
                   f"- Score coverage: {summary['scored_pairs']}/{summary['pairs']}. Quality means are conditional on successful generation and judging; failed cases are not assigned zero or silently dropped from completion counts."]
     else:
         lines += ["- Quality improvement: **not measured**; fixture checks do not establish writing quality."]
+    if result.get("recovery"):
+        recovery = result["recovery"]
+        first = recovery["initial_summary"]
+        lines += ["", "## Recovery accounting", "",
+                  "This is a recovered evaluation, not an all-successful first pass. Successful cases and their existing judgments were retained unchanged; only failed operations were retried from frozen saved artifacts.", "",
+                  f"- Initial completion: {first['completed_pairs']}/{first['pairs']} ({first['completion_rate']:.1%})",
+                  f"- Completion after recovery: {summary['completed_pairs']}/{summary['pairs']} ({summary['completion_rate']:.1%})",
+                  f"- Recovery attempts recorded: {len(recovery['attempts'])}",
+                  "- Original failures and sanitized diagnostics remain in each recovered item's `prior_attempts`; the initial summary and learning checks remain in `recovery`."]
     lines += ["", "| Case | Brand | Changed | Before | After | Change |", "|---|---|---|---:|---:|---:|"]
     for case in result["cases"]:
         score = case.get("scores") or {}
@@ -354,7 +370,196 @@ def write_results(result: dict, output: Path) -> None:
     (output / "RESULTS.md").write_text("\n".join(lines))
 
 
+def remember_attempt(record: dict) -> None:
+    previous = copy.deepcopy(record)
+    history = previous.pop("prior_attempts", [])
+    record["prior_attempts"] = [*history, previous]
+    for key in ("error", "error_diagnostics", "failed_stage", "partial_after", "branch_errors"):
+        record.pop(key, None)
+
+
+def validate_recovery(source: dict, settings: Any, live: bool) -> None:
+    """A retry must not silently become a new benchmark or a model search."""
+    from backend.creatoros import prompts
+
+    if source.get("mode") != ("live" if live else "fixture"):
+        raise ValueError("Recovery mode must match the saved report; use --live for a live report.")
+    expected = {
+        "model": settings.chat_model if live else "deterministic-demo",
+        "judge_prompt": JUDGE_PROMPT if live else None,
+        "opening_judge_prompt": OPENING_PROMPT if live else None,
+        "generation_prompts": {name: getattr(prompts, name) for name in ("STRATEGIST", "WRITER", "EDITOR", "REVISION")},
+        "prompt_version": prompts.PROMPT_VERSION,
+        "case_manifest_sha256": canonical_hash(json.loads((ROOT / "evals/cases.json").read_text())),
+    }
+    for key, value in expected.items():
+        if source.get("config", {}).get(key) != value:
+            raise ValueError(f"Cannot recover with changed {key}; keep the original benchmark configuration.")
+
+
+async def restore_generation(run: dict, post: dict, settings: Any, directory: Path,
+                             live: bool) -> tuple[dict, dict]:
+    from backend.creatoros.fixtures import seed_demo
+    from backend.creatoros.store import Store
+
+    if not run.get("id") or not post.get("id") or run.get("post_id") != post["id"]:
+        raise ValueError("Recovery requires the original matching run and post records.")
+    if not run.get("profile"):
+        raise ValueError("Recovery requires a frozen voice profile.")
+    before = post.get("original_draft", "")
+    writer = run.get("artifacts", {}).get("writer", {}).get("output", {})
+    if before and writer.get("content") != before:
+        raise ValueError("The preserved original draft must match its cached writer artifact; refusing to regenerate it.")
+    store = Store(directory)
+    try:
+        seed_demo(store)
+        store.put("runs", run)
+        store.put("posts", post)
+        finished, final = await execute_run(store, configure(settings, directory, live), run)
+        if before and final.get("original_draft") != before:
+            raise GenerationFailure("Recovery changed the preserved original draft", finished, final)
+        return finished, final
+    finally:
+        store.close()
+
+
+async def resume_evaluation(args: argparse.Namespace) -> int:
+    """Retry operational failures once, without rerolling successful content or scores."""
+    from backend.creatoros.config import load_settings
+    from backend.creatoros.pipeline import PIPELINE_VERSION
+
+    source_path = Path(args.resume_results)
+    source = json.loads(source_path.read_text())
+    settings = load_settings()
+    validate_recovery(source, settings, args.live)
+    if args.live and not settings.mesh_api_key:
+        raise SystemExit("--live requires MESH_API_KEY. No fixture scores will be substituted.")
+    result = copy.deepcopy(source)
+    recovery = result.setdefault("recovery", {
+        "initial_summary": copy.deepcopy(source["summary"]),
+        "initial_learning_checks": copy.deepcopy(source["learning_checks"]),
+        "initial_generated_at": source["generated_at"], "attempts": [],
+        "note": "Completion after recovery is not first-pass reliability. Successful cases, scores, and semantic ablation failures are not rerolled.",
+    })
+    attempt = {"started_at": stamp(), "source_file": source_path.name,
+               "source_sha256": canonical_hash(source), "pipeline_version": PIPELINE_VERSION,
+               "previous_summary": copy.deepcopy(source["summary"]),
+               "retried_cases": [], "retried_branches": [], "retained_cases": [],
+               "retained_ablations": [], "judge_usage": []}
+    recovery["attempts"].append(attempt)
+    rng = random.Random(source["config"]["seed"])
+    private_diagnostics = settings.data_dir / "evaluation_diagnostics" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    with tempfile.TemporaryDirectory(prefix="creatoros-evaluation-recovery-") as directory:
+        root = Path(directory)
+        client = None
+        if args.live:
+            from backend.creatoros.mesh import MeshClient
+            client = MeshClient(configure(settings, root, True))
+        for index, case in enumerate(result["cases"]):
+            if not case.get("error"):
+                attempt["retained_cases"].append(case["id"])
+                continue
+            attempt["retried_cases"].append(case["id"])
+            remember_attempt(case)
+            print(f"Recovering {case['id']} from saved artifacts", flush=True)
+            try:
+                run, post = case.get("run", {}), case.get("post", {})
+                if run.get("status") != "complete":
+                    case["evaluation_stage"] = "generation"
+                    run, post = await restore_generation(run, post, settings, root / f"case-{index}", args.live)
+                if not post.get("content"):
+                    raise GenerationFailure("Saved run has no final content", run, post)
+                case.update({"run": run, "post": post, "generation_completed": True,
+                             "before": post.get("original_draft", ""), "after": post["content"],
+                             "checks": deterministic_checks(post),
+                             "voice_profile": case.get("voice_profile") or run["profile"]})
+                if client and not case.get("scores"):
+                    case["evaluation_stage"] = "quality_judging"
+                    case["scores"] = await judge_pair(client, case["brief"], case["voice_profile"],
+                                                      case["before"], case["after"], rng)
+                case["evaluation_stage"] = "complete"
+            except Exception as exc:
+                case.update(failure_artifacts(exc))
+                case["error"] = f"{type(exc).__name__}: {exc}"
+                case.setdefault("failed_stage", case.get("evaluation_stage", "recovery"))
+                if getattr(exc, "diagnostics", None):
+                    case["error_diagnostics"] = exc.diagnostics
+                print(f"  ERROR: {case['error']}", file=sys.stderr, flush=True)
+        for index, ablation in enumerate(result.get("ablations", [])):
+            # A completed but noncompliant opening is evidence, not an operational failure.
+            if not ablation.get("error"):
+                attempt["retained_ablations"].append(ablation["id"])
+                continue
+            remember_attempt(ablation)
+            changed = False
+            errors = {}
+            for name in ("baseline", "learned"):
+                run, post = ablation.get(f"{name}_run", {}), ablation.get(name, {})
+                if run.get("status") == "complete" and post.get("content"):
+                    continue
+                attempt["retried_branches"].append(f"{ablation['id']}:{name}")
+                try:
+                    finished, final = await restore_generation(run, post, settings, root / f"ablation-{index}-{name}", args.live)
+                    ablation[f"{name}_run"], ablation[name] = finished, final
+                    changed = True
+                except Exception as exc:
+                    details = failure_artifacts(exc)
+                    errors[name] = {"error": f"{type(exc).__name__}: {exc}", **details}
+                    if details:
+                        ablation[f"{name}_run"], ablation[name] = details["run"], details["post"]
+            try:
+                if errors:
+                    ablation["branch_errors"] = errors
+                    raise RuntimeError("Ablation recovery failed in " + ", ".join(errors))
+                baseline, learned = ablation["baseline"], ablation["learned"]
+                ablation["baseline_hook"] = strategy_hook(baseline, ablation["baseline_run"])
+                ablation["learned_hook"] = strategy_hook(learned, ablation["learned_run"])
+                ablation["policy_changed"] = bool(ablation["baseline_hook"] and ablation["learned_hook"]
+                                                   and ablation["baseline_hook"] != ablation["learned_hook"])
+                if changed:
+                    for key in ("scores", "opening_judgment"):
+                        ablation.pop(key, None)
+                if client:
+                    if not ablation.get("scores"):
+                        ablation["scores"] = await judge_pair(client, ablation["brief"], ablation["baseline_run"]["profile"],
+                                                              baseline["content"], learned["content"], rng)
+                    if not ablation.get("opening_judgment"):
+                        ablation["opening_judgment"] = await classify_openings(client, baseline["content"], learned["content"], rng)
+                    ablation["observed_baseline_hook"] = ablation["opening_judgment"]["before"]["opening_type"]
+                    ablation["observed_learned_hook"] = ablation["opening_judgment"]["after"]["opening_type"]
+                    ablation["opening_compliance"] = (ablation["observed_baseline_hook"] == ablation["baseline_hook"]
+                                                         and ablation["observed_learned_hook"] == ablation["learned_hook"])
+                    ablation["passed"] = ablation["policy_changed"] and ablation["opening_compliance"]
+                else:
+                    ablation["opening_compliance"] = None
+                    ablation["passed"] = ablation["policy_changed"]
+            except Exception as exc:
+                ablation["passed"] = False
+                ablation["error"] = f"{type(exc).__name__}: {exc}"
+                if getattr(exc, "diagnostics", None):
+                    ablation["error_diagnostics"] = exc.diagnostics
+            for check in result["learning_checks"]:
+                if check["id"] == ablation["id"]:
+                    for key in ("error", "observed_baseline_hook", "observed_learned_hook", "opening_compliance"):
+                        check.pop(key, None)
+                    check.update({key: value for key, value in ablation.items() if key in {
+                        "passed", "description", "baseline_hook", "learned_hook", "observed_baseline_hook",
+                        "observed_learned_hook", "opening_compliance", "source", "error"}})
+        attempt["judge_usage"] = getattr(client, "usage", []) if client else []
+        count = preserve_private_diagnostics(root, private_diagnostics)
+        attempt["private_diagnostics"] = {"files_preserved": count,
+            "location": f"CREATOROS_DATA_DIR/evaluation_diagnostics/{private_diagnostics.name}" if count else None}
+    result["summary"] = summarize(result["cases"])
+    result["completed_at"] = attempt["completed_at"] = stamp()
+    attempt["summary_after_recovery"] = copy.deepcopy(result["summary"])
+    write_results(result, args.output)
+    print(json.dumps(result["summary"], indent=2))
+    return 1 if result["summary"]["errors"] or result["summary"]["mechanical_failures"] or not all(c.get("passed") for c in result["learning_checks"]) else 0
+
+
 async def evaluate(args: argparse.Namespace) -> int:
+    if getattr(args, "resume_results", None):
+        return await resume_evaluation(args)
     from backend.creatoros.config import load_settings
     from backend.creatoros.fixtures import seed_demo
     from backend.creatoros.store import Store
@@ -505,6 +710,7 @@ def main() -> None:
     parser.add_argument("--live", action="store_true", help="Spend Mesh credits to generate and judge actual AI output")
     parser.add_argument("--output", type=Path, default=ROOT / "evals", help="Output directory (default: tracked evals/)")
     parser.add_argument("--seed", type=int, default=2026, help="Reproducible candidate-order random seed")
+    parser.add_argument("--resume-results", type=Path, help="Recover operational failures from a saved report; preserve successes, frozen inputs, cached artifacts, and failure history")
     args = parser.parse_args()
     raise SystemExit(asyncio.run(evaluate(args)))
 

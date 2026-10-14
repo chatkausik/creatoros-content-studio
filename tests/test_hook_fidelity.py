@@ -53,7 +53,7 @@ def test_statement_hook_can_include_a_later_question():
         _validate_hook_opening("A polished demo can hide failures. Which one would you inspect?", "question-first")
 
 
-@pytest.mark.parametrize("instruction", ['a document labeled "Failure"', "a screen labelled Rerun Cases", 'the words reading "Evaluation Loop"'])
+@pytest.mark.parametrize("instruction", ['a document labeled "Failure"', "a screen labelled Rerun Cases", 'the words reading "Evaluation Loop"', 'the words "Evaluation Loop"'])
 def test_visual_brief_rejects_literal_labels(instruction):
     from backend.creatoros.schemas import VisualBrief
 
@@ -66,6 +66,19 @@ def test_visual_brief_allows_explicit_no_text_constraint():
 
     prompt = "An editorial illustration of a blank page and a green loop, with no text, no labels, no letters, and no numbers."
     assert VisualBrief.model_validate({"image_prompt": prompt, "reason": "The visual communicates a feedback loop."}).image_prompt == prompt
+
+
+def test_visual_brief_accepts_actual_icon_only_labels_and_rich_reason():
+    from backend.creatoros.schemas import VisualBrief
+
+    prompt = "Square editorial illustration showing a circular track made of three clear segments labeled only by icons (no text): a red exclamation mark for “failure captured,” a single puzzle piece for “one change,” and a refresh-style circular arrow for “re-run.” Use a deep navy background and soft lighting."
+    reason = "The circular track represents an evaluation loop, while the unmarked cards represent saved failure cases. " * 6
+    assert 500 < len(reason) < 1200
+    result = VisualBrief.model_validate({"image_prompt": prompt, "reason": reason})
+    assert result.image_prompt == prompt
+    assert result.reason == reason.strip()
+    with pytest.raises(ValidationError):
+        VisualBrief.model_validate({"image_prompt": prompt, "reason": "x" * 1201})
 
 
 def test_visual_generation_appends_trusted_constraint_after_model_prompt(tmp_path, monkeypatch):

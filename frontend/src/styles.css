@@ -3915,3 +3915,23 @@ h3 {
     touch-action: none;
   }
 }
+
+.evaluation-recovery {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 14px 15px;
+  margin: 0 0 13px;
+  border: 1px solid #e5d9bb;
+  background: #faf5e8;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.75;
+  color: #826b42;
+}
+.evaluation-recovery > svg {
+  margin-top: 3px;
+}
+.evaluation-recovery strong {
+  font-weight: 600;
+}

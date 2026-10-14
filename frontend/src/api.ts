@@ -100,6 +100,16 @@ export interface Evaluation {
   summary?: Record<string, unknown>;
   cases?: Record<string, unknown>[];
   results?: Record<string, unknown>[];
+  recovery?: {
+    initial_summary: {
+      pairs: number;
+      scored_pairs: number;
+      completed_pairs: number;
+      errors: number;
+    };
+    attempts: Record<string, unknown>[];
+    note?: string;
+  };
   [key: string]: unknown;
 }
 export interface Bootstrap {
