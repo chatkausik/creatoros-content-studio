@@ -1,0 +1,25 @@
+case_id,brand_id,source,changed,mean_before,mean_after,delta,error
+fresh-privacy-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Mesh returned invalid structured output twice (SelectedStrategy). The failed step can be retried.
+fresh-privacy-brand-milo,brand-milo,mesh,True,4,4.8,0.7999999999999998,
+fresh-accessibility-brand-ada,brand-ada,mesh,True,5,5,0,
+fresh-accessibility-brand-milo,brand-milo,mesh,True,4.8,5,0.20000000000000018,
+fresh-rollback-brand-ada,brand-ada,mesh,True,5,5,0,
+fresh-rollback-brand-milo,brand-milo,mesh,True,,,,MeshError: Mesh timed out. Your completed steps are saved; retry the failed step.
+fresh-batch-cost-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-batch-cost-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-timeouts-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-timeouts-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-versioning-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-versioning-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-stale-data-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-stale-data-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-duplicate-feedback-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-duplicate-feedback-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-dataset-consent-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-dataset-consent-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-multilingual-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-multilingual-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-error-logs-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-error-logs-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-uncertainty-brand-ada,brand-ada,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.
+fresh-uncertainty-brand-milo,brand-milo,mesh,False,,,,GenerationFailure: Could not connect to Mesh. Check your connection and retry.

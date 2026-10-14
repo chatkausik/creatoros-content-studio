@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -15,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .config import ROOT, Settings, load_settings
 from .fixtures import seed_demo
@@ -27,6 +28,7 @@ logger = logging.getLogger("creatoros")
 Mode = Literal["demo", "live"]
 Source = Literal["manual", "simulated"]
 Window = Literal["24h", "7d"]
+Platform = Literal["linkedin", "newsletter"]
 
 
 class Sample(BaseModel):
@@ -51,6 +53,26 @@ class ModeInput(BaseModel):
     mode: Mode = "live"
 
 
+class ImageInput(ModeInput):
+    regenerate: bool = False
+    new_attempt: bool = False
+    feedback: str = Field(default="", max_length=1200)
+
+
+class ImageSelection(BaseModel):
+    variant_id: str
+
+
+class EditInput(BaseModel):
+    content: str = Field(min_length=20, max_length=12000)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    reason: str = Field(min_length=5, max_length=1200)
+
+
+class ApprovalInput(BaseModel):
+    acknowledge_unresolved: bool = False
+
+
 class RunInput(BaseModel):
     brand_id: str
     brief: str = Field(min_length=10, max_length=6000)
@@ -59,6 +81,8 @@ class RunInput(BaseModel):
     feedback_source: Source = "simulated"
     window: Window = "24h"
     generate_image: bool = False
+    platform: Platform = "linkedin"
+    model_preset: Literal["budget", "submission-tested"] | None = None
 
 
 class ScheduleInput(BaseModel):
@@ -92,13 +116,43 @@ class FeedbackInput(BaseModel):
     reactions: int = Field(default=0, ge=0, le=10**12, strict=True)
     comments: int = Field(default=0, ge=0, le=10**12, strict=True)
     reposts: int = Field(default=0, ge=0, le=10**12, strict=True)
-    window: Window = "24h"
+    window: Literal["24h", "7d", "unknown", "cumulative"] = "24h"
     source: Source = "manual"
+    observed_at: datetime | None = None
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    source_url: str = Field(default="", max_length=2000)
+    notes: str = Field(default="", max_length=1200)
+
+    @field_validator("observed_at", "window_start", "window_end")
+    @classmethod
+    def valid_observation_time(cls, value):
+        if value is not None:
+            if value.tzinfo is None or value > datetime.now(timezone.utc):
+                raise ValueError("Measurement time must include a timezone and cannot be in the future.")
+            return value.astimezone(timezone.utc)
+        return value
+
+    @model_validator(mode="after")
+    def complete_interval(self):
+        if bool(self.window_start) != bool(self.window_end):
+            raise ValueError("Provide both the measurement window start and end, or leave both empty.")
+        if self.window_start and self.window_end <= self.window_start:
+            raise ValueError("The measurement window must end after it starts.")
+        return self
+
+    @field_validator("source_url")
+    @classmethod
+    def safe_source_url(cls, value):
+        if value and (urlparse(value).scheme not in {"https", "http"} or not urlparse(value).netloc):
+            raise ValueError("Use a full HTTP or HTTPS source URL.")
+        return value
 
 
 class LearnInput(BaseModel):
     source: Source = "manual"
     window: Window = "24h"
+    platform: Platform = "linkedin"
 
 
 class ImportInput(PublishInput):
@@ -108,10 +162,12 @@ class ImportInput(PublishInput):
     hook: Literal["problem-first", "outcome-first", "question-first"]
     source: Literal["manual"] = "manual"
     source_url: str = Field(default="", max_length=2000)
+    platform: Platform = "linkedin"
 
 
 def read_evaluation():
-    path = ROOT / "evals" / "results.json"
+    reports = [ROOT / "evals" / name / "results.json" for name in ("fresh-recovered", "fresh")]
+    path = next((report for report in reports if report.exists()), ROOT / "evals" / "results.json")
     if path.exists():
         try:
             return json.loads(path.read_text())
@@ -124,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     image_locks: dict[str, asyncio.Lock] = {}
     profile_locks: dict[str, asyncio.Lock] = {}
+    review_locks: dict[str, asyncio.Lock] = {}
 
     async def worker(store):
         from .pipeline import run_pipeline
@@ -196,6 +253,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Record not found.")
         return obj
 
+    def require_idle_post(post):
+        """Call under the store lock before committing a workflow transition."""
+        post_id = post["id"]
+        run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+        if ((run and run["status"] in {"queued", "running"})
+                or image_locks.get(post_id, asyncio.Lock()).locked()
+                or review_locks.get(post_id, asyncio.Lock()).locked()):
+            raise HTTPException(409, "Wait for the active generation, review or visual request before scheduling or confirming publication.")
+
+    def current_action_draft(original):
+        """Revalidate after an await; never overwrite a newer workflow decision."""
+        current = required("posts", original["id"])
+        run = db().get("runs", current.get("run_id")) if current.get("run_id") else None
+        watched = ("status", "content", "title", "versions", "reviews", "approved_at", "scheduled_at", "published_at")
+        if (current["status"] not in {"draft", "needs_review", "approved"}
+                or any(current.get(key) != original.get(key) for key in watched)
+                or (run and run["status"] in {"queued", "running"})):
+            raise HTTPException(409, "The post changed while this action was running. Its current content and publishing decision were preserved; reopen it before retrying.")
+        return current
+
     @app.get("/api/health")
     def health():
         return {"status": "ok", "service": "creatoros", "version": "1.0.0"}
@@ -209,7 +286,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "snapshots": store.list("snapshots"),
             "runs": [{k: v for k, v in r.items() if k not in {"artifacts", "profile"}} for r in store.list("runs")],
             "settings": {"mesh_configured": bool(settings.mesh_api_key), "chat_model": settings.chat_model,
-                         "image_model": settings.image_model, "mode": "local", "platform": "LinkedIn"},
+                         "image_model": settings.image_model, "mode": "local", "platform": "LinkedIn",
+                         "platforms": ["linkedin", "newsletter"],
+                         "model_presets": {"budget": "openai/gpt-4o-mini", "submission-tested": "openai/gpt-5.1"}},
             "evaluation": read_evaluation(),
         }
 
@@ -256,71 +335,223 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/runs/{run_id}/resume", status_code=202)
     def resume(run_id: str):
-        run = required("runs", run_id)
-        if run["status"] not in {"failed", "interrupted"}:
-            raise HTTPException(409, "Only failed or interrupted runs can be resumed.")
-        return db().patch("runs", run_id, {"status": "queued", "error": None})
+        with db().lock:
+            run = required("runs", run_id)
+            if run["status"] not in {"failed", "interrupted"}:
+                raise HTTPException(409, "Only failed or interrupted runs can be resumed.")
+            post_id = run["post_id"]
+            if image_locks.get(post_id, asyncio.Lock()).locked() or review_locks.get(post_id, asyncio.Lock()).locked():
+                raise HTTPException(409, "Finish the active visual or editorial action before resuming generation.")
+            post = required("posts", post_id)
+            human_versions = any(v.get("kind") in {"human_edit", "manual_edit"} or v.get("source") == "human"
+                                 for v in post.get("versions", []))
+            manual_reviews = any(r.get("review_action") == "manual" or r.get("content_sha256")
+                                 or r.get("reviewed_content_sha256") for r in post.get("reviews", []))
+            human_decisions = any(e.get("node") == "human" or e.get("choice") in {
+                "Reviewed the edited draft", "Created a matching visual"
+            } for e in db().list("events", post_id=post_id))
+            manual_visuals = any(v.get("id") != f"{run_id}:image:initial" for v in post.get("image_variants", []))
+            if (post["status"] not in {"generating", "draft", "needs_review"}
+                    or any(post.get(key) for key in ("approved_at", "scheduled_at", "published_at", "pending_image_request"))
+                    or human_versions or manual_reviews or human_decisions or manual_visuals):
+                raise HTTPException(409, "This post has changes or publishing decisions made after generation. Resume would replace that work. Keep this post and start a new draft instead.")
+            if len([r for r in db().list("runs") if r["status"] in {"queued", "running"}]) >= 3:
+                raise HTTPException(429, "Three runs are already queued. Let one finish before resuming another.")
+            return db().patch("runs", run_id, {"status": "queued", "error": None})
 
     @app.get("/api/posts/{post_id}")
     def read_post(post_id: str):
         return hydrate_post(db(), required("posts", post_id))
 
     @app.post("/api/posts/{post_id}/image")
-    async def image(post_id: str, payload: ModeInput):
-        from .pipeline import generate_visual
+    async def image(post_id: str, payload: ImageInput):
+        from .pipeline import create_run_manifest, frozen_settings, generate_visual
+        from .mesh import MeshError
         post = required("posts", post_id)
         if not post.get("content"):
             raise HTTPException(409, "Finish the draft before generating its visual.")
         if post["status"] not in {"draft", "needs_review", "approved"}:
             raise HTTPException(409, "Generate the image before scheduling or publishing.")
+        run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+        if run and run["status"] in {"queued", "running"}:
+            raise HTTPException(409, "Wait for generation to finish before changing the image.")
         lock = image_locks.setdefault(post_id, asyncio.Lock())
         if lock.locked():
             raise HTTPException(409, "An image is already being generated for this post.")
         async with lock:
-            if post.get("image_url") and (payload.mode == "demo" or post.get("image_source") == "mesh"):
-                return hydrate_post(db(), post)
+            with db().lock:
+                post = current_action_draft(post)
+                if review_locks.get(post_id, asyncio.Lock()).locked():
+                    raise HTTPException(409, "Finish the active editorial review before changing the image.")
+                if post.get("image_url") and not payload.regenerate and not post.get("image_stale") and not post.get("pending_image_request") and (payload.mode == "demo" or post.get("image_source") == "mesh"):
+                    return hydrate_post(db(), post)
+                content_hash = hashlib.sha256(post["content"].encode()).hexdigest()
+                pending = post.get("pending_image_request") or {}
+                if payload.new_attempt or pending.get("content_sha256") != content_hash or pending.get("feedback") != payload.feedback or pending.get("mode") != payload.mode:
+                    pending = {"id": str(uuid4()), "content_sha256": content_hash, "feedback": payload.feedback,
+                               "mode": payload.mode, "manifest": create_run_manifest(settings, post.get("platform", "linkedin"))}
+                pending.setdefault("manifest", create_run_manifest(settings, post.get("platform", "linkedin")))
+                db().patch("posts", post_id, {"pending_image_request": pending})
+            # A newly requested visual is a new action, not a resumed old text run.
             try:
-                result = await generate_visual(post, settings, mode=payload.mode)
+                image_settings = frozen_settings(settings, pending["manifest"])
+                result = await generate_visual(post, image_settings, mode=payload.mode,
+                                               feedback=payload.feedback, regeneration_id=pending["id"])
+            except MeshError as error:
+                db().patch("posts", post_id, {"image_error": {"message": str(error), "diagnostics": error.diagnostics,
+                                                              "request_id": pending["id"], "created_at": utcnow()}})
+                raise HTTPException(502, str(error)) from None
             except Exception:
                 raise HTTPException(502, "Image generation failed. The text is saved. Check Mesh image-model access and credits before retrying.") from None
-            updated = db().patch("posts", post_id, {
-                "image_url": result["image_url"], "image_prompt": result.get("image_prompt"),
-                "image_model": result.get("model"), "image_source": result.get("source", payload.mode),
-            })
-            db().add_event(post_id, "visual", "Created a matching visual", result.get("image_prompt", "Matched the illustration to the post."), event_id=f"image:{post_id}:{payload.mode}")
+            variant = {"id": pending["id"], "url": result["image_url"], "source": result.get("source", payload.mode),
+                       "feedback": payload.feedback, "created_at": utcnow(), "prompt": result.get("image_prompt"),
+                       "model": result.get("model"), "actual_model": result.get("actual_model"),
+                       "usage": result.get("usage", []), "content_sha256": content_hash,
+                       "asset_sha256": result.get("asset_sha256") or result.get("content_sha256"),
+                       "request_id": result.get("request_id", pending["id"]), "reason": result.get("reason"),
+                       "manifest": pending["manifest"]}
+            with db().lock:
+                post = current_action_draft(post)
+                variants = hydrate_post(db(), post).get("image_variants", [])
+                variants.append(variant)
+                updated = db().patch("posts", post_id, {
+                    "image_url": result["image_url"], "image_prompt": result.get("image_prompt"),
+                    "image_model": result.get("model"), "image_source": result.get("source", payload.mode),
+                    "image_variants": variants, "selected_image_variant_id": variant["id"],
+                    "image_stale": False, "pending_image_request": None, "image_error": None, "approved_at": None,
+                    "status": "draft" if post["status"] == "approved" else post["status"],
+                })
+            db().add_event(post_id, "visual", "Created a matching visual", result.get("image_prompt", "Matched the illustration to the post."), [variant["id"]], event_id=f"image:{post_id}:{variant['id']}")
+            return hydrate_post(db(), updated)
+
+    @app.post("/api/posts/{post_id}/image/select")
+    def select_image(post_id: str, payload: ImageSelection):
+        with db().lock:
+            post = required("posts", post_id)
+            run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+            if image_locks.get(post_id, asyncio.Lock()).locked() or review_locks.get(post_id, asyncio.Lock()).locked() or (run and run["status"] in {"queued", "running"}):
+                raise HTTPException(409, "Finish the active generation or review before selecting an image.")
+            if post["status"] not in {"draft", "needs_review", "approved"}:
+                raise HTTPException(409, "Choose an image before scheduling or publishing.")
+            variants = hydrate_post(db(), post).get("image_variants", [])
+            variant = next((v for v in variants if v["id"] == payload.variant_id), None)
+            if not variant:
+                raise HTTPException(404, "Image version not found.")
+            content_hash = hashlib.sha256(post["content"].encode()).hexdigest()
+            result = db().patch("posts", post_id, {"image_variants": variants, "selected_image_variant_id": variant["id"],
+                "image_url": variant["url"], "image_source": variant["source"], "image_prompt": variant.get("prompt"),
+                "image_model": variant.get("model"), "image_stale": bool(variant.get("content_sha256") and variant["content_sha256"] != content_hash),
+                "approved_at": None, "status": "draft" if post["status"] == "approved" else post["status"]})
+            db().add_event(post_id, "human", "Selected image version", f"Selected saved variant {variant['id']}.", [variant["id"]])
+            return hydrate_post(db(), result)
+
+    @app.post("/api/posts/{post_id}/edit")
+    def edit_post(post_id: str, payload: EditInput):
+        with db().lock:
+            post = required("posts", post_id)
+            if post["status"] not in {"draft", "needs_review", "approved"}:
+                raise HTTPException(409, "Edit a completed draft before scheduling or publishing.")
+            run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+            if (run and run["status"] in {"running", "queued"}) or image_locks.get(post_id, asyncio.Lock()).locked() or review_locks.get(post_id, asyncio.Lock()).locked():
+                raise HTTPException(409, "Wait for the active generation or review to finish before editing.")
+            if post.get("platform", "linkedin") == "linkedin" and len(payload.content) > 3000:
+                raise HTTPException(422, "LinkedIn content must be at most 3,000 characters.")
+            versions = list(post.get("versions", []))
+            versions.append({"id": str(uuid4()), "version": len(versions) + 1, "content": payload.content,
+                             "title": payload.title or post["title"], "kind": "human_edit", "source": "human",
+                             "reason": payload.reason, "created_at": utcnow()})
+            changes = {"content": payload.content, "versions": versions, "review_stale": True,
+                       "image_stale": bool(post.get("image_url")), "status": "needs_review", "approved_at": None}
+            if payload.title:
+                changes["title"] = payload.title
+            result = db().patch("posts", post_id, changes)
+            db().add_event(post_id, "human", "Edited the draft", payload.reason)
+            return hydrate_post(db(), result)
+
+    @app.post("/api/posts/{post_id}/review")
+    async def review_edited_post(post_id: str, payload: ModeInput):
+        from .pipeline import create_run_manifest, review_post
+        post = required("posts", post_id)
+        if post["status"] not in {"draft", "needs_review", "approved"}:
+            raise HTTPException(409, "Review a completed draft before scheduling or publishing.")
+        lock = review_locks.setdefault(post_id, asyncio.Lock())
+        if lock.locked():
+            raise HTTPException(409, "This post is already being reviewed.")
+        run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+        if run and run["status"] in {"queued", "running"}:
+            raise HTTPException(409, "Wait for generation to finish before requesting a new review.")
+        async with lock:
+            with db().lock:
+                post = current_action_draft(post)
+                if image_locks.get(post_id, asyncio.Lock()).locked():
+                    raise HTTPException(409, "Finish the active visual request before reviewing this draft.")
+            brand = required("brands", post["brand_id"])
+            try:
+                result = await review_post(post, (run or {}).get("profile") or brand.get("profile", {}), settings, payload.mode)
+            except ValidationError as error:
+                raise HTTPException(422, "Draft does not meet the platform's review requirements: " + "; ".join(item["msg"] for item in error.errors(include_input=False))) from None
+            except Exception:
+                raise HTTPException(502, "Could not complete the editorial review. Your text and earlier reviews are saved.") from None
+            result["content_sha256"] = hashlib.sha256(post["content"].encode()).hexdigest()
+            result["manifest"] = create_run_manifest(settings, post.get("platform", "linkedin"))
+            result["version"] = len(post.get("versions", []))
+            result["review_action"] = "manual"
+            with db().lock:
+                post = current_action_draft(post)
+                updated = db().patch("posts", post_id, {"reviews": [*post.get("reviews", []), result],
+                    "review_stale": False, "status": "draft" if result.get("approved") else "needs_review", "approved_at": None})
+            db().add_event(post_id, "editor", "Reviewed the edited draft", "A new review is linked to the current text; previous reviews remain historical.")
             return hydrate_post(db(), updated)
 
     @app.post("/api/posts/{post_id}/approve")
-    def approve(post_id: str):
-        post = required("posts", post_id)
-        if post["status"] not in {"draft", "needs_review", "approved"} or not post.get("content"):
-            raise HTTPException(409, "Only completed drafts can be approved.")
-        if post["status"] == "approved":
-            return hydrate_post(db(), post)
-        result = db().patch("posts", post_id, {"status": "approved", "approved_at": utcnow()})
-        db().add_event(post_id, "human", "Approved for scheduling", "The creator reviewed and approved the content.")
-        return hydrate_post(db(), result)
+    def approve(post_id: str, payload: ApprovalInput = ApprovalInput()):
+        with db().lock:
+            post = required("posts", post_id)
+            run = db().get("runs", post.get("run_id")) if post.get("run_id") else None
+            if run and run["status"] in {"queued", "running"}:
+                raise HTTPException(409, "Wait for generation to finish before approving this draft.")
+            if review_locks.get(post_id, asyncio.Lock()).locked() or image_locks.get(post_id, asyncio.Lock()).locked():
+                raise HTTPException(409, "Wait for the current review or visual generation to finish before approval.")
+            if post["status"] not in {"draft", "needs_review", "approved"} or not post.get("content"):
+                raise HTTPException(409, "Only completed drafts can be approved.")
+            if post["status"] == "approved":
+                return hydrate_post(db(), post)
+            latest_review = (post.get("reviews") or [None])[-1]
+            editorial_concerns = bool(latest_review and (
+                not latest_review.get("approved")
+                or latest_review.get("requests")
+                or latest_review.get("requires_human_review")
+            ))
+            if (post["status"] == "needs_review" or post.get("review_stale") or post.get("image_stale") or editorial_concerns) and not payload.acknowledge_unresolved:
+                raise HTTPException(409, "Review the unresolved editorial or visual concerns and explicitly acknowledge them before approval.")
+            result = db().patch("posts", post_id, {"status": "approved", "approved_at": utcnow()})
+            db().add_event(post_id, "human", "Approved for scheduling", "The creator reviewed and approved the content." + (" Unresolved or stale checks were explicitly acknowledged." if payload.acknowledge_unresolved else ""))
+            return hydrate_post(db(), result)
 
     @app.post("/api/posts/{post_id}/schedule")
     def schedule(post_id: str, payload: ScheduleInput):
-        post = required("posts", post_id)
-        if post["status"] not in {"approved", "scheduled", "ready_to_publish"}:
-            raise HTTPException(409, "Approve this post before scheduling it.")
-        if not post.get("image_url"):
-            raise HTTPException(409, "Generate a matching visual before scheduling the finished post.")
-        when = payload.scheduled_at.isoformat()
-        result = db().patch("posts", post_id, {"status": "scheduled", "scheduled_at": when})
+        with db().lock:
+            post = required("posts", post_id)
+            require_idle_post(post)
+            if post["status"] not in {"approved", "scheduled", "ready_to_publish"}:
+                raise HTTPException(409, "Approve this post before scheduling it.")
+            if not post.get("image_url"):
+                raise HTTPException(409, "Generate a matching visual before scheduling the finished post.")
+            when = payload.scheduled_at.isoformat()
+            result = db().patch("posts", post_id, {"status": "scheduled", "scheduled_at": when})
         db().add_event(post_id, "scheduler", "Queued for publication", f"Scheduled for {when}. Publication requires manual confirmation.")
         return hydrate_post(db(), result)
 
     @app.post("/api/posts/{post_id}/publish")
     def publish(post_id: str, payload: PublishInput):
-        post = required("posts", post_id)
-        if post["status"] not in {"approved", "scheduled", "ready_to_publish", "published_manually"}:
-            raise HTTPException(409, "Approve the post before confirming publication.")
-        if post["status"] == "published_manually":
-            return hydrate_post(db(), post)
-        result = db().patch("posts", post_id, {"status": "published_manually", "published_at": payload.published_at.isoformat()})
+        with db().lock:
+            post = required("posts", post_id)
+            require_idle_post(post)
+            if post["status"] not in {"approved", "scheduled", "ready_to_publish", "published_manually"}:
+                raise HTTPException(409, "Approve the post before confirming publication.")
+            if post["status"] == "published_manually":
+                return hydrate_post(db(), post)
+            result = db().patch("posts", post_id, {"status": "published_manually", "published_at": payload.published_at.isoformat()})
         db().add_event(post_id, "human", "Publication confirmed manually", "The creator marked this post as published. CreatorOS did not call a platform publishing API.")
         return hydrate_post(db(), result)
 
@@ -343,16 +574,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(409, "Only published posts can receive performance feedback.")
         if post.get("is_demo") and payload.source != "simulated":
             raise HTTPException(400, "Demonstration posts can only receive simulated feedback.")
-        observation = {**payload.model_dump(), "id": f"{post_id}:{payload.source}:{payload.window}",
-                       "post_id": post_id, "brand_id": post["brand_id"], "captured_at": utcnow()}
-        db().put("feedback", observation)
-        db().add_event(post_id, "feedback", f"Recorded {payload.window} performance", f"{payload.source} observation: {payload.impressions} impressions, {payload.comments} comments, {payload.reposts} reposts.", [observation["id"]])
+        duration = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}.get(payload.window)
+        published = datetime.fromisoformat(post["published_at"].replace("Z", "+00:00"))
+        expected = published + duration if duration else None
+        timing = "simulated" if payload.source == "simulated" else "unverified"
+        if payload.source != "simulated" and payload.observed_at and expected:
+            tolerance = timedelta(hours=1 if payload.window == "24h" else 6)
+            if payload.window_start and payload.window_end:
+                matched = (abs(payload.window_start - published) <= timedelta(minutes=1)
+                           and abs(payload.window_end - expected) <= timedelta(minutes=1)
+                           and payload.observed_at >= payload.window_end)
+            else:
+                matched = abs(payload.observed_at - expected) <= tolerance
+            timing = "window_matched" if matched else "out_of_window"
+        observation = {**payload.model_dump(mode="json"), "id": f"{post_id}:{payload.source}:{payload.window}",
+                       "post_id": post_id, "brand_id": post["brand_id"], "platform": post.get("platform", "linkedin"),
+                       "captured_at": utcnow(), "timing_status": timing,
+                       "window_start": payload.window_start.isoformat() if payload.window_start else published.isoformat() if duration else None,
+                       "window_end": payload.window_end.isoformat() if payload.window_end else expected.isoformat() if expected else None,
+                       "window_basis": "declared_interval" if payload.window_start else "capture_age" if payload.observed_at else "unverified"}
+        with db().lock:
+            previous = db().get("feedback", observation["id"])
+            if previous and all(previous.get(key) == value for key, value in observation.items() if key != "captured_at"):
+                return previous
+            if previous and not previous.get("revision_id"):
+                legacy = {**previous, "id": str(uuid4()), "feedback_id": previous["id"], "legacy": True}
+                db().put("feedback_revisions", legacy)
+            revision_id = str(uuid4())
+            observation["revision_id"] = revision_id
+            observation["revision"] = (previous or {}).get("revision", 0) + 1
+            db().put("feedback_revisions", {**observation, "id": revision_id, "feedback_id": observation["id"]})
+            db().put("feedback", observation)
+        db().add_event(post_id, "feedback", f"Recorded {payload.window} performance", f"{payload.source} observation: {payload.impressions} impressions, {payload.comments} comments, {payload.reposts} reposts. Timing: {timing}.", [revision_id])
         return observation
 
     @app.post("/api/brands/{brand_id}/learn")
     def learning(brand_id: str, payload: LearnInput):
         required("brands", brand_id)
-        return learn(db(), brand_id, payload.source, payload.window)
+        return learn(db(), brand_id, payload.source, payload.window, payload.platform)
 
     @app.get("/api/evaluation")
     def evaluation():

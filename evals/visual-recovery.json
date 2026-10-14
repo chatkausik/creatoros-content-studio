@@ -1,0 +1,163 @@
+{
+  "kind": "new_configuration_visual_verification",
+  "created_at": "2026-10-14T19:10:32.354541+00:00",
+  "prior_failure_report": "upgrade-smoke.json",
+  "prior_request_id": "e1bb5f59-ba8e-4518-ad55-c34727c0dc51",
+  "change": "VisualBrief now targets 500–1000 characters and reports actual character count and required reduction above the unchanged 2000-character maximum. Shared prompts and versions are unchanged; the new manifest captures output schema hashes.",
+  "budget": {
+    "additional_visual_attempts": 1,
+    "newsletter_reruns": 0,
+    "semantic_rerolls": 0
+  },
+  "fictional_brand": "Ada Chen",
+  "post_title": "Stop AI retries from double-charging your users",
+  "post_word_count": 630,
+  "content_sha256": "3a77bc3487cbe14abea629e9d7510b3dd9e10a83a0172dc40a2ae1d3a0fb1050",
+  "manifest": {
+    "version": 1,
+    "chat_model": "openai/gpt-5.1",
+    "image_model": "openai/gpt-image-1-mini",
+    "prompt_version": "2026-10-14.5",
+    "pipeline_version": "2026-10-14.5",
+    "max_revisions": 2,
+    "platform": "newsletter",
+    "prompt_hashes": {
+      "PROFILE": "63afc79966ce127b32b3332181bb80e9dc73f3d9dc4b01e890114b641152f7b8",
+      "STRATEGIST": "7d443e07a0b6fda2ee98da05d9a88ea4e7bbd016c50a975de725d588a7f4f51c",
+      "WRITER": "858f12e9cb8262152e0531ea9627571e102719430f5565ccc9aeb39808dffc8b",
+      "EDITOR": "06dba8a8b4057fa85bc9828f8238e87f420de6bf38b3f06776f17f20c1b9fa06",
+      "REVISION": "f92a5aabebf943290f201f36e4c048f5f7ae77a89c9b00b054b8dcdd0c831b07",
+      "VISUAL": "e51b682742be5bc89e86c672153835ed4150853cb79ba77894f4cbf53f3a6e56",
+      "VISUAL_CONSTRAINT": "be21f73926aa4848b8815e8709fd3ddb28766bdc21f31608ba0c4cff1c8b1005",
+      "platform_rules": "c52716f5b333870b20623cce8ae8103634c62551753d8ffd90763aaaa1e3b016"
+    },
+    "schema_hashes": {
+      "BrandProfile": "2ef247da33b3b77fe30bf82b63f92b097afd3d472ab1fce9bf258e30fe184ea5",
+      "Strategy": "ed281e54f7e82021e44acc3f5747c6cc9452cfef491369b1a246b446a3d0727e",
+      "Draft": "4258bdc1b37873283553a03ee261baba8bd37408c302b0250fe15fb61bd4cc9d",
+      "Revision": "5796e899421d0ce24892cf77b0485ac7eac216c6e413ba2bbc3311cb813f828e",
+      "InitialReview": "5395ecc9975779e211bc2c668deb00faffb8f721836e925c26589c816a4c3033",
+      "RefinementReview": "f41cad7b0b793dd2c15a9493a186190411f93dde83194db5d8ad4bcf685129e7",
+      "VisualBrief": "d3cafa2ccbb8c046a67e6b17e15ceb8ffe2af865b6ff5a66aed3083d65ed8e3c"
+    },
+    "schema_coverage": "captured_at_run_creation",
+    "generation_settings": {
+      "strategist_temperature": 0.2,
+      "writer_temperature": 0.4,
+      "editor_temperature": 0,
+      "revision_temperature": 0.25,
+      "max_tokens": 2200,
+      "image_quality": "low",
+      "image_size": "1024x1024"
+    },
+    "provenance": "captured_at_run_creation"
+  },
+  "request_id": "163b881d-a780-4792-8074-f91c87aabe61",
+  "feedback": "Use a warm restrained orange accent to distinguish the uncertain branch and muted green for the checked safe branch. Make the stopping point and the reversible loop visually clear with unmarked geometric forms. Keep all screens and documents blank; no text, letters, numbers, labels or logos.",
+  "status": "complete",
+  "initial_image": {
+    "label": "initial",
+    "asset_file": "b9bc098cfb4ab27d6d49538e.png",
+    "asset_sha256": "b9bc098cfb4ab27d6d49538e04a43623e4df9b53e436090ff906f86be3296c15",
+    "image_prompt": "Square editorial illustration of a modern, abstract control hub for an AI payments system. The scene is divided into two visually distinct vertical lanes. On the left lane, representing safe read-only operations, a series of thin, translucent data streams flow smoothly from stylized user icons through tall, minimal screens and loop back to a central AI console. The streams are light blue lines with soft glow, forming gentle arcs that clearly return to their origin, suggesting repeated, harmless checks. On the right lane, representing side-effectful actions, fewer but heavier glowing tokens travel along a separate track. Each token is a solid, warm-colored shape that must pass through a geometric gate structure with a prominent keyhole-shaped cutout before continuing to a stylized payment terminal block. Behind the gate, one token appears securely docked in a small status bay connected to the payment terminal, while an identical second token is visually blocked by a barrier and redirected along a side track toward a small, elevated platform where a single neutral human silhouette sits at a console. The composition highlights a clear contrast: light, looping flows on the left, and gated, tightly controlled flows on the right. Color palette: cool blues and teals for background and read-only flows, with warm oranges and yellows for the action tokens, gate, and human review area. Lighting is clean and slightly directional from above, creating subtle shadows and depth while keeping the scene uncluttered and highly legible. No readable text or symbols, just abstract shapes and icons conveying control, gating, and escalation.\n\nMandatory image constraint: no written or printed text,\nletters, words, numbers, labels, captions, typography, logos or watermarks.\nAll documents and screens must be blank or contain only abstract non-symbolic shapes.",
+    "reason": "The image uses an abstract dual-lane control hub to convey the article’s core idea: AI workflows must distinguish between safely retriable read calls and risky side-effectful calls. Smooth, looping light-blue flows show read-only retries as harmless, while warm, solid tokens that pass through a keyhole-like gate and sometimes get diverted to a human operator represent idempotent, controlled retries for payments and refunds with explicit human handoff when outcomes are unclear—all without using any text in the artwork.",
+    "requested_model": "openai/gpt-image-1-mini",
+    "actual_model": null,
+    "request_id": "c802ae84524ee861a7136357d34b6c5a749c6669a3c083a48d585b5a2eb40097",
+    "source": "mesh",
+    "usage": [
+      {
+        "model": "openai/gpt-5.1",
+        "requested_model": "openai/gpt-5.1",
+        "actual_model": "gpt-5.1-2025-11-13",
+        "cache_hit": false,
+        "elapsed_seconds": 5.647,
+        "prompt_tokens": 1253,
+        "completion_tokens": 354,
+        "total_tokens": 1607,
+        "stage": "visual_director"
+      },
+      {
+        "model": "openai/gpt-5.1",
+        "requested_model": "openai/gpt-5.1",
+        "actual_model": "gpt-5.1-2025-11-13",
+        "cache_hit": false,
+        "elapsed_seconds": 6.792,
+        "prompt_tokens": 1655,
+        "completion_tokens": 426,
+        "total_tokens": 2081,
+        "stage": "visual_director"
+      },
+      {
+        "model": "openai/gpt-image-1-mini",
+        "requested_model": "openai/gpt-image-1-mini",
+        "actual_model": null,
+        "cache_hit": false,
+        "elapsed_seconds": 10.62,
+        "prompt_tokens": 357,
+        "completion_tokens": 272,
+        "total_tokens": 629,
+        "stage": "image_generation",
+        "request_id": "c802ae84524ee861a7136357d34b6c5a749c6669a3c083a48d585b5a2eb40097",
+        "download_retry": false
+      }
+    ],
+    "feedback": "",
+    "created_at": "2026-10-14T19:04:37.291189+00:00",
+    "asset_path": "assets/newsletter-initial.png"
+  },
+  "new_image": {
+    "asset_file": "262a59c58c90a333709bc277.png",
+    "asset_sha256": "262a59c58c90a333709bc2771415c7b6148267762db42a1688d60a4189ef3ee7",
+    "image_prompt": "Square editorial illustration showing an abstract, minimal control system that visually distinguishes safe read-only retries from risky side-effectful retries, without any text. Center-left: a calm, looping path made of muted green geometric shapes (simple rounded rectangles and arrows) forming a smooth circular loop that returns to its starting point, suggesting safe, repeatable actions. The loop is clearly closed and contained. Center-right: a warm, restrained orange path branching away from a central hub, leading to a single, one-way action represented by a bold, solid orange geometric block that stops the flow. This orange branch is clearly not a loop; it ends at a definitive stopping point to imply no automatic repetition. At the junction, a neutral gray hub shape splits the flow into the green loop and the orange one-way branch. Subtle secondary shapes near the orange path hint at ambiguity—overlapping translucent forms and a faded, interrupted path that dead-ends—to suggest uncertainty and the need for human review, while the green side remains clean, uncluttered and consistent. Background is light, off-white with faint grid-like structure to evoke a systems diagram without text or icons. Lighting is soft and even, with gentle shadows to give depth. Colors: muted greens for the safe loop, warm orange accents for the risky branch, neutral grays and off-whites for structure. No text, symbols, numbers, UI screens, or logos—only abstract geometric forms and flow-like arrows implied by shape direction.\n\nMandatory image constraint: no written or printed text,\nletters, words, numbers, labels, captions, typography, logos or watermarks.\nAll documents and screens must be blank or contain only abstract non-symbolic shapes.",
+    "image_prompt_characters": 1748,
+    "reason": "Communicates the core idea of separating safe, retryable read-only operations (the green closed loop) from risky side-effectful operations (the orange one-way branch with a clear stopping block). The non-looping orange path emphasizes explicit limits on retries and the need to stop when state is uncertain, while the green loop shows stable, repeatable outcomes. Overlapping translucent shapes near the orange side hint at ambiguity and human escalation without using any text or icons, matching the requested color cues and abstract, unmarked geometry.",
+    "requested_model": "openai/gpt-image-1-mini",
+    "actual_model": null,
+    "source": "mesh",
+    "request_id": "163b881d-a780-4792-8074-f91c87aabe61",
+    "usage": [
+      {
+        "model": "openai/gpt-5.1",
+        "requested_model": "openai/gpt-5.1",
+        "actual_model": "gpt-5.1-2025-11-13",
+        "cache_hit": false,
+        "elapsed_seconds": 7.639,
+        "prompt_tokens": 1352,
+        "completion_tokens": 418,
+        "total_tokens": 1770,
+        "stage": "visual_director"
+      },
+      {
+        "model": "openai/gpt-image-1-mini",
+        "requested_model": "openai/gpt-image-1-mini",
+        "actual_model": null,
+        "cache_hit": false,
+        "elapsed_seconds": 10.334,
+        "prompt_tokens": 344,
+        "completion_tokens": 272,
+        "total_tokens": 616,
+        "stage": "image_generation",
+        "request_id": "163b881d-a780-4792-8074-f91c87aabe61",
+        "download_retry": false
+      }
+    ],
+    "director_model": "openai/gpt-5.1",
+    "director_actual_model": "gpt-5.1-2025-11-13",
+    "asset_path": "assets/newsletter-regenerated.png"
+  },
+  "finished_at": "2026-10-14T19:10:50.344553+00:00",
+  "visual_review": {
+    "status": "inspected",
+    "method": "Assistant visual inspection with view_image; not automated image scoring or human-user review",
+    "asset_file": "262a59c58c90a333709bc277.png",
+    "observations": [
+      "Muted green arrows form a clear loop around an unmarked central block.",
+      "An orange branch ends at a distinct orange block, reflecting the requested uncertain path and stopping point.",
+      "The image contains no observed readable words, numbers, labels or logos.",
+      "The revision follows the requested calmer green/orange palette and makes the loop clearer than the initial key metaphor."
+    ],
+    "limitations": "One inspected illustration does not establish a general image-generation success rate.",
+    "asset_path": "assets/newsletter-regenerated.png"
+  }
+}

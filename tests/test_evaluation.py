@@ -54,7 +54,7 @@ def test_judge_unblinds_both_candidate_orders():
             for candidate in ("candidate_a", "candidate_b"):
                 value = 2 if payload[candidate] == "Weak draft." else 4
                 scores[candidate] = {"brief_fulfillment": value, "specificity": value,
-                                     "clarity": value, "brand_fit": value, "rationale": "Evidence.", "opening_type": "unclear"}
+                                     "clarity": value, "brand_fit": value, "factual_care": value, "rationale": "Evidence.", "opening_type": "unclear"}
             return schema.model_validate(scores)
 
     judge = IndependentJudge()
@@ -84,6 +84,8 @@ def test_summary_retains_regressions_and_excludes_unscored_cases():
     assert summary["completed_pairs"] == 3
     assert summary["completion_rate"] == 0.75
     assert "failures are excluded" in summary["quality_statistics_scope"]
+    assert "factual_care" not in summary["by_dimension"]  # Old four-dimension evidence stays honest.
+    assert summary["paired_change"]["small_n"] is True
 
 
 def test_failed_generations_preserve_both_ablation_branches_and_private_diagnostics(tmp_path, monkeypatch):
@@ -228,6 +230,8 @@ def test_recovery_reuses_frozen_artifacts_and_only_retries_failed_operations(tmp
     assert initial_path.read_bytes() == source_bytes
     assert set(retried) == expected_runs and len(retried) == 3
     assert result["summary"]["completed_pairs"] == 8
+    assert result["summary"]["first_pass_completed_pairs"] == 6
+    assert result["summary"]["recovered_pairs"] == 2
     assert result["summary"]["mechanical_failures"] == 0
     assert result["recovery"]["initial_summary"] == source["summary"]
     assert result["recovery"]["initial_learning_checks"] == source["learning_checks"]
@@ -312,3 +316,224 @@ def test_recovery_retries_only_missing_judgment_and_preserves_saved_scores(tmp_p
     assert result["cases"][0]["before"] == source["cases"][0]["before"]
     assert result["cases"][0]["prior_attempts"] == [source["cases"][0]]
     assert result["summary"]["scored_pairs"] == 8
+
+
+def test_fresh_suite_is_distinct_bounded_and_covers_both_voices(tmp_path, monkeypatch):
+    from scripts.evaluate import ROOT, select_cases
+    from backend.creatoros.mesh import MeshClient
+
+    manifest = json.loads((ROOT / "evals/cases.json").read_text())
+    fresh = select_cases(manifest, "fresh")
+    assert len(fresh) == 24
+    assert {b["id"] for _, b in fresh}.isdisjoint({b["id"] for _, b in select_cases(manifest, "smoke")})
+    assert len({p["brand_id"] for p, _ in select_cases(manifest, "fresh", 2)}) == 2
+    assert all(b["constraints"]["max_words"] == 150 and "150" in b["brief"] for _, b in fresh)
+
+    async def reject_ai(*args, **kwargs):
+        raise AssertionError("Budget rejection and dry planning must make no AI call")
+
+    monkeypatch.setattr(MeshClient, "complete_json", reject_ai)
+    with pytest.raises(ValueError, match="exceeding"):
+        asyncio.run(evaluate(argparse.Namespace(live=True, output=tmp_path, seed=2026, suite="fresh",
+                                               max_generation_runs=1)))
+    assert not (tmp_path / "results.json").exists()
+    assert asyncio.run(evaluate(argparse.Namespace(live=True, output=tmp_path, seed=2026, suite="fresh",
+                                                   plan_only=True))) == 0
+
+
+def test_constraints_check_lengths_bullets_hashtags_and_markdown():
+    from scripts.evaluation_metrics import constraint_checks
+    checks = constraint_checks("**A title**\n- First item\n- Second item\n#AI", {
+        "max_words": 5, "max_characters": 20, "min_bullets": 3, "max_hashtags": 0, "plain_text": True})
+    assert checks["passed"] is False
+    assert not any(checks["checks"].values())
+    assert constraint_checks("A short line", {"min_words": 2, "max_words": 4})["passed"] is True
+    assert constraint_checks("Unconstrained")['passed'] is None
+
+
+def test_bootstrap_preserves_negative_differences_and_is_seeded():
+    from scripts.evaluation_metrics import paired_bootstrap
+    a = paired_bootstrap([-2, -1, 0, 1], seed=33)
+    assert a == paired_bootstrap([-2, -1, 0, 1], seed=33)
+    assert a["mean_delta"] == -0.5
+    assert a["interval_95"][0] < 0 < a["interval_95"][1]
+    assert paired_bootstrap([2, 2, 2])["interval_95"] == [2, 2]
+    assert paired_bootstrap([])["interval_95"] is None
+
+
+def test_learned_profiles_are_used_in_every_generation_and_voice_conditions(tmp_path, monkeypatch):
+    import backend.creatoros.pipeline as pipeline
+    import backend.creatoros.config as config
+    from backend.creatoros.config import Settings
+    from backend.creatoros.mesh import MeshClient
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private"))
+    extracted = []
+    real_extract = pipeline.extract_profile
+
+    async def learn(samples, settings, mode):
+        result = await real_extract(samples, settings, mode)
+        result["summary"] = f"Unique extracted profile {len(extracted)}"
+        extracted.append(result)
+        return result
+
+    async def reject_ai(*args, **kwargs):
+        raise AssertionError("Fixture learned-profile evaluation makes no paid request")
+
+    monkeypatch.setattr(pipeline, "extract_profile", learn)
+    monkeypatch.setattr(MeshClient, "complete_json", reject_ai)
+    output = tmp_path / "report"
+    code = asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                         suite="fresh", case_limit=2, learn_voices=True, voice_checks=True)))
+    report = json.loads((output / "results.json").read_text())
+    assert code == 0
+    assert len(extracted) == 2
+    assert [c["run"]["profile"] for c in report["cases"]] == extracted
+    assert all(a["baseline_run"]["profile"] == a["learned_run"]["profile"] == extracted[0]
+               for a in report["ablations"])
+    records = report["voice_checks"]
+    assert len(records) == 6 and not any(r.get("scored") for r in records)
+    assert records[0]["run"]["profile"] == extracted[0]
+    assert records[1]["run"]["profile"] == extracted[1]
+    assert records[2]["run"]["profile"] not in extracted
+
+
+def test_voice_classifier_is_blinded_and_recovers_anonymous_identity():
+    from scripts.evaluation_voice import identify_voice
+
+    class BlindJudge:
+        async def complete_json(self, system, user, schema, **kwargs):
+            payload = json.loads(user)
+            assert set(payload) == {"candidate", "reference_a", "reference_b"}
+            assert "target_brand_id" not in user and "condition" not in user and "profile" not in user
+            key = next(k for k in ("reference_a", "reference_b") if payload[k]["samples"] == ["Direct sentences."])
+            return schema.model_validate({"reference": key, "rationale": "Short direct wording."})
+
+    brands = [{"id": "precise", "samples": [{"text": "Direct sentences."}]},
+              {"id": "warm", "samples": [{"text": "Could we begin with a small question?"}]}]
+    for seed in range(4):
+        judged = asyncio.run(identify_voice(BlindJudge(), "Inspect the input.", brands, random.Random(seed)))
+        assert judged["predicted_brand_id"] == "precise"
+
+
+def test_recovery_rejects_judge_model_changes(tmp_path, monkeypatch):
+    import backend.creatoros.config as config
+    import scripts.evaluate as evaluator
+    from backend.creatoros.config import Settings
+
+    settings = Settings(data_dir=tmp_path / "private")
+    monkeypatch.setattr(config, "load_settings", lambda: settings)
+    output = tmp_path / "source"
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026))) == 0
+    source = json.loads((output / "results.json").read_text())
+    source["mode"] = "live"
+    source["config"].update(model=settings.chat_model, judge_model="other/model",
+                             judge_prompt=evaluator.JUDGE_PROMPT, opening_judge_prompt=evaluator.OPENING_PROMPT)
+    with pytest.raises(ValueError, match="changed judge_model"):
+        evaluator.validate_recovery(source, settings, True, judge_model="changed/model")
+
+
+def test_atomic_partial_checkpoint_retains_success_and_continues_remaining_cases(tmp_path, monkeypatch):
+    import scripts.evaluate as evaluator
+    import backend.creatoros.config as config
+    from backend.creatoros.config import Settings
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private"))
+    real_checkpoint = evaluator.write_progress
+    stopped = False
+
+    def interrupt_after_first(result, output, rng, phase):
+        nonlocal stopped
+        real_checkpoint(result, output, rng, phase)
+        if phase == "case-complete" and not stopped:
+            stopped = True
+            raise KeyboardInterrupt("Simulated process interruption")
+
+    monkeypatch.setattr(evaluator, "write_progress", interrupt_after_first)
+    output = tmp_path / "report"
+    with pytest.raises(KeyboardInterrupt):
+        asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                                               suite="fresh", case_limit=2, skip_ablations=True)))
+    source = json.loads((output / "progress.json").read_text())
+    assert source["status"] == "partial"
+    assert source["progress"]["planned_pairs"] == 2
+    assert source["progress"]["planned_completion_rate"] == 0.5
+    assert len(source["progress"]["pending_pair_ids"]) == 1
+    assert not (output / "results.json").exists()
+    assert not list(output.glob(".progress-*"))
+    monkeypatch.setattr(evaluator, "write_progress", real_checkpoint)
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                            resume_results=output / "progress.json"))) == 0
+    final = json.loads((output / "results.json").read_text())
+    assert final["cases"][0] == source["cases"][0]
+    assert final["summary"]["completed_pairs"] == 2
+    assert final["continuations"][0]["initial_progress"] == source["progress"]
+    assert json.loads((output / "progress.json").read_text())["status"] == "fixture"
+
+
+def test_partial_resume_reuses_completed_pipeline_after_interrupted_return(tmp_path, monkeypatch):
+    import backend.creatoros.config as config
+    import backend.creatoros.pipeline as pipeline
+    from backend.creatoros.config import Settings
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private"))
+    original = pipeline.run_pipeline
+    completed_ids = []
+
+    async def interrupt_return(run_id, store, settings):
+        await original(run_id, store, settings)
+        completed_ids.append(run_id)
+        raise asyncio.CancelledError("Interrupted between node persistence and report checkpoint")
+
+    monkeypatch.setattr(pipeline, "run_pipeline", interrupt_return)
+    output = tmp_path / "report"
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                           suite="fresh", case_limit=1, skip_ablations=True)))
+
+    async def reject_reroll(*args, **kwargs):
+        raise AssertionError("Persisted completed generation must not be rerun")
+
+    monkeypatch.setattr(pipeline, "run_pipeline", reject_reroll)
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                           resume_results=output / "progress.json"))) == 0
+    report = json.loads((output / "results.json").read_text())
+    assert report["cases"][0]["run"]["id"] == completed_ids[0]
+    assert report["summary"]["first_pass_completed_pairs"] == 0
+    assert report["summary"]["recovered_pairs"] == 1
+    assert report["cases"][0]["prior_attempts"][0]["error"].startswith("Evaluation process interrupted")
+
+
+def test_transport_recovery_keeps_schema_failures_and_successes_unchanged(tmp_path, monkeypatch):
+    import backend.creatoros.config as config
+    import backend.creatoros.pipeline as pipeline
+    from backend.creatoros.config import Settings
+    from scripts.evaluate import transport_failure
+
+    monkeypatch.setattr(config, "load_settings", lambda: Settings(data_dir=tmp_path / "private"))
+    initial = tmp_path / "initial"
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=initial, seed=2026))) == 0
+    path = initial / "results.json"
+    report = json.loads(path.read_text())
+    report["cases"][0]["error"] = "GenerationFailure: Mesh returned invalid structured output twice (SelectedStrategy)."
+    report["cases"][1]["error"] = "MeshError: Mesh timed out. Your completed steps are saved; retry the failed step."
+    report["summary"] = summarize(report["cases"])
+    path.write_text(json.dumps(report))
+
+    async def reject_generation(*args, **kwargs):
+        raise AssertionError("Completed pipelines and schema failures must not be rerolled")
+
+    monkeypatch.setattr(pipeline, "run_pipeline", reject_generation)
+    output = tmp_path / "recovered"
+    assert asyncio.run(evaluate(argparse.Namespace(live=False, output=output, seed=2026,
+                        resume_results=path, retry_transport_only=True))) == 1
+    recovered = json.loads((output / "results.json").read_text())
+    assert recovered["cases"][0] == report["cases"][0]
+    assert recovered["cases"][2:] == report["cases"][2:]
+    assert recovered["cases"][1]["prior_attempts"] == [report["cases"][1]]
+    assert recovered["recovery"]["attempts"][0]["retained_nontransport_failures"] == [report["cases"][0]["id"]]
+    assert recovered["progress"]["phase"] == "complete"
+    assert recovered["progress"]["completed_pairs"] == recovered["summary"]["completed_pairs"]
+    assert recovered["progress"]["saved_at"] != report["progress"]["saved_at"]
+    assert transport_failure({"error": "GenerationFailure: Could not connect to Mesh. Check your connection and retry."})
+    assert not transport_failure({"error": "MeshError: Mesh credit or spend limit was reached."})

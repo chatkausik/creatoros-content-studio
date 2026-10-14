@@ -1,35 +1,45 @@
-# Demo walkthrough and recording storyboard
+# CreatorOS demo walkthrough
 
-[Watch the 75-second captioned walkthrough](demo.mp4). The video is a sequence of screenshots captured from the actual application using labeled demonstration fixtures. It is not a real-time recording of agent execution or evidence of published LinkedIn content. The live benchmark reports provide independent AI-run evidence.
+[Watch the 90-second captioned walkthrough](demo.mp4). This is a sequence of actual application screenshots, assembled with captions. It is not a real-time recording of agent execution. Every featured profile, sample, draft, image and feedback observation belongs to the fictional Ada Chen demonstration workspace. No content was published to an external platform for this walkthrough.
 
-Still images: [Studio](screenshots/studio.png), [voice profile](screenshots/voice.png), [editor comparison](screenshots/editor.png), [queue](screenshots/queue.png), [learning](screenshots/learning.png), [next post](screenshots/next-post.png), and [decision trail](screenshots/decisions.png).
+The demo mode uses deterministic text and editorial fixtures and illustrative SVG images. Its scores do not measure live AI quality. The simulated engagement figures are authored inputs for exercising the learning policy, not audience outcomes. Live evaluation results, failures and limitations are reported separately in the [fresh benchmark](../evals/fresh/RESULTS.md) and [qualitative inspection](../evals/fresh/REVIEW.md); different judge and writing models can still share biases.
 
-The following three-minute storyboard is available for a longer live recording.
+## Captioned sequence
 
-Use your real multi-sample brand and authentic manually entered metrics when available. Otherwise keep the application's demo and simulated labels visible. Use a recorded successful run if latency makes a fresh run impractical, and identify it as recorded. Do not imply that a local demo was published on LinkedIn.
-
-The local creator profile has eight authentic source-attributed samples. Its captured LinkedIn counts have an unspecified cumulative window; do not relabel them as first-24-hour or first-7-day observations for the demonstration. Use the explicit simulated cohort to demonstrate a reproducible preference change until comparable real observations are available.
-
-| Time | On screen | Suggested narration |
+| Time | Screen | What the frame shows |
 |---|---|---|
-| 0:00–0:25 | Brand samples, extracted profile, evidence excerpts | “CreatorOS keeps the writing anchored to these samples while learning which openings appear to resonate.” |
-| 0:25–1:05 | Brief, named agent steps, original/revision comparison | “The strategist chooses an angle. The editor requests specific changes, and the writer's revision preserves a visible trail.” |
-| 1:05–1:25 | Matching image, approval, scheduled queue | “The visual follows the final post. The queue persists the scheduled time and marks it ready for manual publication.” |
-| 1:25–2:10 | Published-post metrics, observation window, new snapshot | “These observations produce a new opening preference. The counts and evidence remain visible, with an early-signal label.” |
-| 2:10–2:40 | Next strategy and draft compared with prior run | “This run consumed the updated preference and changed its opening while keeping the same voice profile.” |
-| 2:40–3:00 | Evaluation summary and case detail | “We tested the loop reproducibly. These are the actual reported results, including limitations and any regressions.” |
+| 0:00–0:09 | [Studio](screenshots/studio.png) | A brief, platform selector, demo label and the strategist, writer, editor and visual stages. |
+| 0:09–0:17 | [Brand voice](screenshots/voice.png) | The fictional profile beside its authored source samples. |
+| 0:17–0:28 | [Editor comparison](screenshots/editor.png) | Saved draft changes and the latest unresolved editorial request after a human edit. |
+| 0:28–0:37 | [Visual direction](screenshots/visuals.png) | Feedback for a new visual, with preserved versions available behind the dialog. |
+| 0:37–0:45 | [Publishing queue](screenshots/queue.png) | One due item and one scheduled reminder; the creator handles publication. |
+| 0:45–0:56 | [Learning](screenshots/learning.png) | Comparable simulated observations, uncertainty ranges and an early preference. |
+| 0:56–1:06 | [Frozen evidence](screenshots/evidence.png) | Snapshot v4, its thresholds and an expanded observation with the actual opening, counts and window. |
+| 1:06–1:18 | [A later draft](screenshots/next-post.png) | A problem-first opening generated using snapshot v4. The policy also preserves exploration. |
+| 1:18–1:30 | [Newsletter](screenshots/newsletter.png) | A subject and longer narrative with sections and a worked hypothetical example. Text and Markdown exports support manual publishing. |
 
-## Before recording
+## Reading the learning demonstration
 
-- Build the frontend and verify that a clean local startup works.
-- Check whether the current evaluation is fixture or live. Claim editorial score improvement only when actual independent live scores support it.
-- Keep synthetic provenance visible and avoid displaying `.env`, keys, submission tokens, or private account information.
-- Prepare one successful text/image run and one feedback update that visibly changes the policy.
-- Keep the original draft, editor requests, revised draft, supporting observation, and evaluation case one click away.
-- Test scheduling with a near-future timestamp, then show the saved queue after refresh.
+The earlier [snapshot v3](screenshots/learning-before.png) was inconclusive: the problem-first range overlapped the outcome-first range. Two simulated feedback records were then changed to create a consistent demonstration cohort. Snapshot v4 preserves nine observation records across three opening styles, with three posts and 6,000 impressions per style. Its problem-first average is 61.7 comments plus reposts per 1,000 impressions. This number is an authored fixture result, not a measured improvement.
 
-## Suggested closing claim
+The [actual opening chain](screenshots/learning-chain.png) intentionally retains the first draft generated with v4: it uses an outcome-first opening because every fourth usable draft explores. The following draft uses the preferred problem-first opening shown in the video. Both consume the same saved policy. Earlier snapshots and their evidence remain available when later metrics change; the UI can open the exact snapshot used by a selected draft.
 
-“CreatorOS preserves the evidence of each editorial change and demonstrates that performance feedback changes the strategy used by later posts.”
+The displayed 90% ranges are descriptive post-level bootstrap ranges. They do not establish causality or higher audience engagement. Real and simulated observations, platforms and observation windows remain separate.
 
-Only add a numerical quality-improvement claim after checking the current live evaluation report. An eight-pair model evaluation does not establish higher audience engagement.
+## Additional close-ups
+
+- [Manual editing](screenshots/manual-edit.png): a human revision saves a new version and clears its approval.
+- [Approval acknowledgement](screenshots/approval.png): unresolved editorial concerns require an explicit creator decision.
+- [Saved visuals](screenshots/visual-gallery.png): three preserved versions, their feedback and the selected visual. Demo regeneration can produce the same SVG composition; live image regeneration is a paid Mesh request.
+- [Decision trail on mobile](screenshots/decisions.png): readable strategy and editor decisions with linked evidence.
+- [Newsletter on mobile](screenshots/mobile.png): a 390-pixel preview with no horizontal overflow.
+
+## Rebuilding the walkthrough
+
+Capture the application through a browser using only clearly labeled fictional records, then run:
+
+```sh
+python3 scripts/build_demo.py
+```
+
+The script requires `ffmpeg` and uses the nine screenshots listed in its `SCENES` array. It produces `docs/demo.mp4` at 1600 × 1000, 24 frames per second, with a 90-second duration. There is no audio track. Keep the screenshot-sequence and fixture disclosures when sharing the video. Local scheduling is a reminder workflow; publishing to LinkedIn or a newsletter platform is manual.

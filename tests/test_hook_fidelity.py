@@ -195,3 +195,43 @@ def test_editor_can_correct_opening_against_the_frozen_hook_policy(tmp_path, mon
         assert post["reviews"][-1]["raw_model_review"] == final_review
         assert post["reviews"][-1]["requests"] == final_review["requests"]
         assert any(event["choice"] == "Editor judgment requires human review" for event in store.list("events", post_id=post["id"]))
+
+
+def test_manual_revision_review_uses_latest_text_and_preserves_unresolved_request(tmp_path, monkeypatch):
+    from copy import deepcopy
+    from backend.creatoros.pipeline import review_post
+
+    before = "A vague idea needs a test.\n\n" + "Consider what a useful response would look like. " * 4
+    after = "A confident response can hide a missing constraint.\n\nSave the exact request and the response you expect. Change one instruction, then compare the next response with the same expectation."
+    initial = review(scores={"specificity": 3}, requests=[{"issue": "The test has no concrete input.", "instruction": "Replace the vague test with a specific hypothetical input."}], approved=False)
+    latest = review(scores={"specificity": 3}, requests=[{"issue": "The new test still omits its input.", "instruction": "Name the ambiguous request and missing information used in the proposed comparison."}], approved=False)
+    post = {"title": "A useful test", "content": after, "brief": "Explain a concrete evaluation", "hook": "problem-first", "platform": "linkedin", "versions": [{"title": "Before", "content": before}, {"title": "After", "content": after, "addressed_requests": ["Replaced generic advice with a fixed-input comparison."]}], "reviews": [{"iteration": 1, **initial}]}
+    frozen = deepcopy(post)
+    captured = []
+
+    async def respond(_client, endpoint, payload, timeout=None, cache=True):
+        captured.append(json.loads(payload["messages"][1]["content"]))
+        return {"model": "actual-editor", "usage": {"total_tokens": 19}, "choices": [{"message": {"content": json.dumps(latest)}}]}
+
+    monkeypatch.setattr(MeshClient, "_post", respond)
+    result = asyncio.run(review_post(post, {"tone": "Practical"}, Settings(data_dir=tmp_path, mesh_api_key="fake-key"), "live"))
+    assert captured[0]["draft"]["content"] == after
+    assert captured[0]["previous_draft"]["content"] == before
+    assert captured[0]["previous_requests"] == initial["requests"]
+    assert result["requests"] == latest["requests"]
+    assert not result["approved"]
+    assert result["iteration"] == 2
+    assert result["actual_model"] == "actual-editor"
+    assert result["usage"][0]["stage"] == "manual_revision_review"
+    assert post == frozen
+
+
+def test_demo_review_never_claims_to_score_arbitrary_manual_edit(tmp_path):
+    from backend.creatoros.pipeline import review_post
+
+    post = {"title": "An edited post", "content": "A concrete failure needs inspection.\n\nSave the original request and document the response you would trust before changing a single instruction.", "hook": "problem-first"}
+    result = asyncio.run(review_post(post, {}, Settings(data_dir=tmp_path), "demo"))
+    assert result["requires_human_review"]
+    assert not result["approved"]
+    assert result["source"] == "demo"
+    assert result["usage"] == []

@@ -1,0 +1,73 @@
+{
+  "source_report_sha256": "a6f40fb54946790cf0675c7c755d2a37e624baab4282d7ab226322ae9d58a011",
+  "unique_generation_runs": 34,
+  "generation": {
+    "recorded_response_count": 222,
+    "recorded_uncached_response_count": 222,
+    "cache_hits": 0,
+    "prompt_tokens": 472317,
+    "completion_tokens": 91760,
+    "total_tokens": 564077,
+    "provider_reported_cost_fields": null
+  },
+  "judging": {
+    "recorded_response_count": 33,
+    "recorded_uncached_response_count": 33,
+    "cache_hits": 0,
+    "prompt_tokens": 45847,
+    "completion_tokens": 8809,
+    "total_tokens": 54656,
+    "provider_reported_cost_fields": null
+  },
+  "recorded_generation_and_judge_totals": {
+    "recorded_response_count": 255,
+    "recorded_uncached_response_count": 255,
+    "cache_hits": 0,
+    "prompt_tokens": 518164,
+    "completion_tokens": 100569,
+    "total_tokens": 618733,
+    "provider_reported_cost_fields": null
+  },
+  "successful_profile_response_caches": [
+    {
+      "brand_id": "brand-ada",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": {
+        "prompt_tokens": 1465,
+        "completion_tokens": 638,
+        "total_tokens": 2103
+      },
+      "scope": "Successful response cache; extraction does not retain its full request usage trace."
+    },
+    {
+      "brand_id": "brand-milo",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": {
+        "prompt_tokens": 775,
+        "completion_tokens": 626,
+        "total_tokens": 1401
+      },
+      "scope": "Successful response cache; extraction does not retain its full request usage trace."
+    }
+  ],
+  "profile_rejected_responses_without_usage": 1,
+  "response_less_transport_attempts_in_original_run": 29,
+  "models": {
+    "configured_writer": "openai/gpt-5.1",
+    "configured_judge": "openai/gpt-4.1",
+    "returned_generation_models": [
+      "gpt-5.1-2025-11-13"
+    ],
+    "returned_judge_models": [
+      "gpt-4.1-2025-04-14"
+    ],
+    "returned_model_ids_differ": true,
+    "scope": "Distinct configured and returned model IDs; this does not establish statistical independence or remove shared-family bias."
+  },
+  "limitations": [
+    "This is recorded token usage, not a complete billing statement.",
+    "Profile extraction discards its client usage trace; successful cached response tokens are shown separately, and rejected profile-response tokens cannot be recovered.",
+    "Transport failures without a response have no returned usage; their billing outcome is unknown.",
+    "No monetary cost is inferred when Mesh does not return a numeric cost field."
+  ]
+}

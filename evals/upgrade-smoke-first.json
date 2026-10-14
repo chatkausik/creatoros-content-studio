@@ -1,0 +1,185 @@
+{
+  "kind": "bounded_live_integration_smoke",
+  "generated_at": "2026-10-14T18:58:42.070541+00:00",
+  "fictional_brand": "Ada Chen",
+  "brand_profile_source": "Authored fictional demonstration profile",
+  "purpose": "One live newsletter pipeline and, only if its initial image succeeds, one explicit visual regeneration. This is an integration check, not a quality benchmark or an audience experiment.",
+  "budget": {
+    "pipeline_runs": 1,
+    "additional_visual_attempts": 1,
+    "semantic_rerolls": 0
+  },
+  "manifest": {
+    "version": 1,
+    "chat_model": "openai/gpt-5.1",
+    "image_model": "openai/gpt-image-1-mini",
+    "prompt_version": "2026-10-14.5",
+    "pipeline_version": "2026-10-14.5",
+    "max_revisions": 2,
+    "platform": "newsletter",
+    "prompt_hashes": {
+      "PROFILE": "63afc79966ce127b32b3332181bb80e9dc73f3d9dc4b01e890114b641152f7b8",
+      "STRATEGIST": "7d443e07a0b6fda2ee98da05d9a88ea4e7bbd016c50a975de725d588a7f4f51c",
+      "WRITER": "858f12e9cb8262152e0531ea9627571e102719430f5565ccc9aeb39808dffc8b",
+      "EDITOR": "06dba8a8b4057fa85bc9828f8238e87f420de6bf38b3f06776f17f20c1b9fa06",
+      "REVISION": "f92a5aabebf943290f201f36e4c048f5f7ae77a89c9b00b054b8dcdd0c831b07",
+      "VISUAL": "e51b682742be5bc89e86c672153835ed4150853cb79ba77894f4cbf53f3a6e56",
+      "VISUAL_CONSTRAINT": "be21f73926aa4848b8815e8709fd3ddb28766bdc21f31608ba0c4cff1c8b1005",
+      "platform_rules": "049c71a76ecf470bd5d2cb92efdf76c7df6656009c723477826dac928dfa8a7b"
+    },
+    "generation_settings": {
+      "strategist_temperature": 0.2,
+      "writer_temperature": 0.4,
+      "editor_temperature": 0,
+      "revision_temperature": 0.25,
+      "max_tokens": 2200,
+      "image_quality": "low",
+      "image_size": "1024x1024"
+    },
+    "provenance": "captured_at_run_creation"
+  },
+  "run_id": "564c9909-7f78-4c0a-bc18-a7056b275a2c",
+  "brief": "Write a newsletter for engineers about making AI tool retries safe and reversible. Explain how to distinguish read-only retries from actions that can duplicate side effects. Use a clearly hypothetical support-workflow example, an idempotency key, checking the outcome before retrying, a bounded retry limit and backoff, and human handoff when state is uncertain. Include an actionable checklist and limitations: compensation is not always an undo, and irreversible actions require confirmation. Do not claim measured results or cite unsupplied facts. Use a concise email subject, 400–700 words, and at least three descriptive plain-text section headings.",
+  "status": "failed",
+  "images": [],
+  "first_attempt_status": "failed",
+  "editor_state": "needs_review",
+  "title": "New draft",
+  "content": "",
+  "word_count": 0,
+  "versions": [],
+  "reviews": [],
+  "pipeline_usage": [
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 7.251,
+      "prompt_tokens": 866,
+      "completion_tokens": 448,
+      "total_tokens": 1314,
+      "stage": "strategist"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 4.56,
+      "prompt_tokens": 1336,
+      "completion_tokens": 364,
+      "total_tokens": 1700,
+      "stage": "strategist"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 14.394,
+      "prompt_tokens": 1325,
+      "completion_tokens": 1117,
+      "total_tokens": 2442
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 13.149,
+      "prompt_tokens": 2478,
+      "completion_tokens": 1260,
+      "total_tokens": 3738
+    }
+  ],
+  "error": "Mesh returned invalid structured output twice (PolicyDraft). The failed step can be retried.",
+  "error_diagnostics": {
+    "schema": "PolicyDraft",
+    "attempt": 2,
+    "errors": [
+      {
+        "type": "value_error",
+        "loc": [
+          "content"
+        ],
+        "msg": "Value error, Newsletter body must contain 400–700 words, with a worked example, exercise and trade-offs"
+      }
+    ],
+    "diagnostic_id": "178d35e41a3e6f7a825e402687aae249e55133de77d2cb5930bec9c46b8bbc4f"
+  },
+  "decisions": [
+    {
+      "id": "564c9909-7f78-4c0a-bc18-a7056b275a2c:failure",
+      "post_id": "65e08064-60ca-41eb-aa33-5b795809b03c",
+      "node": "coordinator",
+      "choice": "Run paused at a recoverable failure",
+      "reason": "Mesh returned invalid structured output twice (PolicyDraft). The failed step can be retried.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T18:59:21.469265+00:00"
+    },
+    {
+      "id": "564c9909-7f78-4c0a-bc18-a7056b275a2c:policy",
+      "post_id": "65e08064-60ca-41eb-aa33-5b795809b03c",
+      "node": "learning",
+      "choice": "Selected problem-first",
+      "reason": "Explore hook styles while collecting sufficient comparable feedback.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T18:58:42.070359+00:00"
+    },
+    {
+      "id": "564c9909-7f78-4c0a-bc18-a7056b275a2c:strategist",
+      "post_id": "65e08064-60ca-41eb-aa33-5b795809b03c",
+      "node": "strategist",
+      "choice": "Designing safe, reversible AI retries in real support workflows",
+      "reason": "Problem-first matches the brief’s focus on broken behavior: unsafe duplicate side effects when AI tools are retried. Engineers know issues like double-charges or duplicate tickets, so starting from that pain creates a clear need to distinguish read-only retries from actions and to use safeguards like idempotency keys and human handoff. The audience narrows to engineers wiring AI into support-style workflows, where these patterns live. For a newsletter, the outline builds from the concrete failure to a simple model (read vs side-effecting), then a hypothetical support example, safeguards, a checklist, and explicit limits so the advice stays practical and testable.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T18:58:53.902537+00:00"
+    }
+  ],
+  "regeneration": {
+    "status": "not_attempted",
+    "reason": "Initial pipeline or image did not complete; no retries or extra generation were attempted."
+  },
+  "finished_at": "2026-10-14T18:59:21.470631+00:00",
+  "rejected_writer_attempts": [
+    {
+      "attempt": 1,
+      "title": "Stop AI retries from double-charging your users",
+      "content": "A single AI retry can quietly double-charge a customer before anyone notices.\n\nSafe retries are not automatic. Especially once an AI tool can open tickets, send refunds, or message customers, a naive retry can clone the side effect instead of the work.\n\nRead-only vs side-effecting tools\n\nStart by labeling every AI tool as one of two types.\n\n1) Read-only\nExamples:\n- Get customer profile\n- Fetch recent orders\n- Search internal docs\n\nThese tools only read data. They do not change state. If a call times out or fails, you can usually retry freely. The risk is cost and latency, not duplication.\n\n2) Side-effecting\nExamples:\n- Create support ticket\n- Issue refund\n- Send email or chat message\n- Update subscription status\n\nThese tools change the world outside your AI system. A retry here can mean:\n- Two tickets for the same issue\n- Two refunds for the same charge\n- Two apology emails for the same incident\n\nThe key design move: treat these two categories differently in your orchestration. Read-only calls get simple retries. Side-effecting calls get guardrails.\n\nA hypothetical support workflow\n\nImagine a support assistant that handles simple refund requests.\n\nFlow:\n- AI reads the conversation and decides a small refund is appropriate.\n- It calls a tool: issue_refund(order_id, amount).\n- The call times out. No clear success or failure.\n\nIf your system just retries issue_refund, the payment API might process a second refund. The customer is over-refunded. Finance has a mess.\n\nInstead, you design the tool like this:\n- The AI first calls get_order(order_id) to inspect current refund status.\n- If no refund for this ticket exists, it calls issue_refund with an idempotency_key.\n- On timeout, the orchestrator checks the outcome before any retry.\n\nNow, even if the orchestrator retries, the payment system sees the same idempotency_key and does not double-refund.\n\nConcrete safeguards for side-effecting tools\n\nYou can make these tools safer and more reversible with a few patterns.\n\nIdempotency keys\n- Generate a stable key per logical action. For example: refund:{ticket_id}:{order_id}.\n- Pass this key through the AI tool call into the downstream system.\n- Design the downstream API to return the existing result when it sees a duplicate key.\n\nInspect before retry\n- Before retrying a side-effecting call, run a read-only check.\n- Example: before re-running issue_refund, call get_order and inspect its refund history.\n- If the desired state is already achieved, skip the retry and return that state to the AI.\n\nBounded retry with backoff\n- Set a small max retry count (for example, 2–3 attempts) for side-effecting tools.\n- Use exponential backoff so you do not hammer a flaky dependency.\n- After the limit, stop and mark the request as “needs review,” not “failed and keep trying.”\n\nHuman handoff on uncertain state\n- When reads and writes disagree, or when you cannot confirm the outcome, pause.\n- Surface a concise state snapshot to an agent: what the AI tried, what it saw, and which tools ran.\n- Let the human decide whether to re-run, compensate, or close.\n\nAn engineer’s checklist for safer AI retries\n\nYou can walk your system and apply this in a repeatable way.\n\nFor each AI tool:\n- Label it: read-only or side-effecting.\n- For side-effecting tools, define the logical action boundary (e.g., “one refund per ticket per order”).\n- Add an idempotency_key parameter and thread it end-to-end.\n- Create a paired read-only tool to inspect current state.\n- Implement “inspect before retry” in your orchestrator.\n- Configure bounded retries with backoff for each side-effecting tool.\n- Define when and how to hand off to a human when state is unclear.\n\nLimitations and trade-offs\n\nCompensating actions are not true undo. A second charge to cancel a mistaken refund may show up as two confusing line items to the customer. A follow-up message to correct an AI mistake can draw more attention to the error.\n\nSome actions are not reversible at all. Physical shipments, legal notices, or destructive deletes need higher friction. For these, consider:\n- Strong confirmation flows, possibly with explicit human approval.\n- Slower paths with more logging and clearer audit trails.\n\nEven with good design, logs and idempotency cannot answer every question. Network glitches, partial failures, and external systems with weak guarantees mean there will always be gray zones. Keeping humans in the loop for ambiguous cases is not a failure; it is part of the safety net.\n\nOne useful action\n\nPick one current AI-powered workflow that triggers an external action. Audit each tool call in that flow, label it read-only or side-effecting, and add an explicit idempotency key and “inspect before retry” step to at least one high-risk tool.",
+      "word_count": 772,
+      "accepted": false,
+      "schema_errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "content"
+          ],
+          "msg": "Value error, Newsletter body must contain 400–700 words, with a worked example, exercise and trade-offs"
+        }
+      ],
+      "actual_model": "gpt-5.1-2025-11-13"
+    },
+    {
+      "attempt": 2,
+      "title": "Stop AI retries from double-charging your users",
+      "content": "A single AI retry can quietly double-charge a customer before anyone notices.\n\nSafe retries are not automatic. Once an AI tool can open tickets, send refunds, or message customers, a naive retry can clone the side effect instead of just repeating a read.\n\nRead-only vs side-effecting tools\n\nStart by labeling every AI tool as one of two types.\n\n1) Read-only\nExamples:\n- Get customer profile\n- Fetch recent orders\n- Search internal docs\n\nThese tools only read data. They do not change state. If a call times out or fails, you can usually retry freely. The risk is cost and latency, not duplication.\n\n2) Side-effecting\nExamples:\n- Create support ticket\n- Issue refund\n- Send email or chat message\n- Update subscription status\n\nThese tools change the world outside your AI system. A retry here can mean:\n- Two tickets for the same issue\n- Two refunds for the same charge\n- Two apology emails for the same incident\n\nThe key design move: treat these two categories differently in your orchestration. Read-only calls get simple retries. Side-effecting calls get guardrails.\n\nA hypothetical support workflow\n\nHere is a clearly hypothetical support-flow example you can inspect and adapt.\n\nImagine a support assistant that handles simple refund requests.\n\nFlow:\n- AI reads the conversation and decides a small refund is appropriate.\n- It calls a tool: issue_refund(order_id, amount).\n- The call times out. No clear success or failure is returned.\n\nIf your system just retries issue_refund, the payment API might process a second refund. The customer is over-refunded. Finance has a mess.\n\nInstead, you design the tools like this:\n- The AI first calls get_order(order_id) to inspect current refund status.\n- If no refund for this ticket exists, it calls issue_refund with an idempotency_key.\n- On timeout, the orchestrator checks the outcome before any retry.\n\nNow, even if the orchestrator retries, the payment system sees the same idempotency_key and does not double-refund. You have turned a risky retry into a repeatable, bounded action.\n\nConcrete safeguards for side-effecting tools\n\nYou can make these tools safer and more reversible with a few patterns.\n\nIdempotency keys\n- Generate a stable key per logical action. For example: refund:{ticket_id}:{order_id}.\n- Pass this key through the AI tool call into the downstream system.\n- Design the downstream API to return the existing result when it sees a duplicate key.\n\nInspect before retry\n- Before retrying a side-effecting call, run a read-only check.\n- Example: before re-running issue_refund, call get_order and inspect its refund history.\n- If the desired state is already achieved, skip the retry and return that state to the AI.\n\nBounded retry with backoff\n- Set a small max retry count (for example, 2–3 attempts) for side-effecting tools.\n- Use exponential backoff so you do not hammer a flaky dependency.\n- After the limit, stop and mark the request as “needs review,” not “failed and keep trying.”\n\nHuman handoff on uncertain state\n- When reads and writes disagree, or when you cannot confirm the outcome, pause.\n- Surface a concise state snapshot to an agent: what the AI tried, what it saw, and which tools ran.\n- Let the human decide whether to re-run, compensate, or close.\n\nPractical checklist: exercise for your system\n\nHere is one concrete exercise you can run this week.\n\nPick a single AI-powered support workflow, such as “customer asks for a refund on a delayed shipment.” Then:\n- List every tool call in that flow.\n- Label each tool: read-only or side-effecting.\n- For each side-effecting tool, write down the logical action boundary (e.g., “one refund per ticket per order”).\n- Add an idempotency_key parameter that encodes that boundary, and thread it end-to-end.\n- Create or confirm a paired read-only tool that lets you inspect current state.\n- Implement “inspect before retry” in your orchestrator for that tool.\n- Configure bounded retries with backoff for that tool, not a global default.\n- Define a clear condition where the system stops and hands the case to a human.\n\nThis is small enough to test, and concrete enough to copy into other flows once it works.\n\nLimitations, trade-offs and irreversibility\n\nCompensating actions are not true undo. A second charge to cancel a mistaken refund may appear as two confusing line items to the customer. A follow-up message to correct an AI mistake can draw more attention to the error and consume more support time.\n\nSome actions are not reversible at all. Physical shipments, legal notices, irreversible database changes, and destructive deletes need higher friction. For these, consider:\n- Strong confirmation flows, possibly with explicit human approval.\n- Slower paths with more logging and clearer audit trails.\n- Extra preconditions that must be read and inspected before the tool can run.\n\nEven with good design, logs and idempotency cannot answer every question. Network glitches, partial failures, and external systems with weak guarantees mean there will always be gray zones. Keeping humans in the loop for ambiguous cases is part of the design, not a patch.\n\nOne useful action\n\nPick one current AI-powered workflow that triggers an external action. Audit each tool call in that flow, label it read-only or side-effecting, and add an explicit idempotency key plus an “inspect before retry” step to at least one high-risk tool. Then test the failure path on purpose so you can see the behavior before a customer does.",
+      "word_count": 889,
+      "accepted": false,
+      "schema_errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "content"
+          ],
+          "msg": "Value error, Newsletter body must contain 400–700 words, with a worked example, exercise and trade-offs"
+        }
+      ],
+      "actual_model": "gpt-5.1-2025-11-13"
+    }
+  ],
+  "visual_review": {
+    "status": "not_applicable",
+    "reason": "No image was generated because the newsletter writer failed before the visual stage."
+  }
+}

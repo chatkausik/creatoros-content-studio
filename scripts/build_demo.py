@@ -11,20 +11,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENES = [
-    ("studio", 9, "CreatorOS | Content that compounds",
-     "A working content studio with distinct strategist, writer, editor and visual agents.\nActual app captures; this walkthrough uses clearly labeled demonstration data."),
-    ("voice", 9, "One creator. A consistent voice.",
-     "Multiple writing samples ground a reusable voice profile.\nLive extraction and every AI generation call run through Mesh."),
-    ("editor", 12, "The editor changes the writing",
-     "Original and revised drafts are saved, with concrete critique and visible changes.\nDemo fixtures illustrate the workflow; the repository also contains live evaluations."),
-    ("queue", 9, "A persistent publishing queue",
-     "Approve content, attach its visual, and schedule a local reminder.\nWhen it is due, publish on LinkedIn yourself and confirm it in the studio."),
-    ("learning", 14, "Why the next post changes",
-     "Simulated feedback changes the preferred opening from outcome-first to problem-first.\nReal and simulated metrics stay separate, with matching observation windows."),
-    ("next-post", 12, "The decision reaches the actual prose",
-     "The next draft opens with a concrete problem and records learning version 2.\nEvery fourth selection explores another opening; associations are not causal claims."),
-    ("decisions", 10, "Follow every decision back to evidence",
-     "Inspect the selected strategy, requested edits, saved revisions and feedback sources.\nRun locally, bring your own voice, and measure what improves."),
+    ("studio", 9, "CreatorOS | A studio that keeps its evidence",
+     "Strategist, writer, editor and visual stages share a persistent creative workflow.\nActual app screenshots; all featured brands, posts and feedback are demonstration fixtures."),
+    ("voice", 8, "A voice grounded in writing samples",
+     "Inspect the profile, source samples and supporting excerpts before drafting.\nThis fictional brand uses a demo profile; live AI extraction and generation use Mesh."),
+    ("editor", 11, "Review the latest version, not yesterday's scores",
+     "Human edits create new versions. The final review keeps unresolved requests visible.\nA creator can recheck the draft or explicitly acknowledge concerns before approval."),
+    ("visuals", 9, "Keep the visual that fits",
+     "Regenerate with feedback and select any preserved image version.\nThese are labeled SVG demo fixtures; live image generation uses paid Mesh requests."),
+    ("queue", 8, "Plan the handoff to publication",
+     "Approve a draft, attach a visual and save a publishing reminder.\nScheduling is local; publication on LinkedIn or a newsletter platform remains manual."),
+    ("learning", 11, "Enough evidence to change direction",
+     "Comparable simulated observations inform an opening preference, with uncertainty visible.\nReal and simulated metrics stay separate; weak or overlapping evidence keeps exploration active."),
+    ("evidence", 10, "Freeze the evidence behind the decision",
+     "Each snapshot preserves exact observation revisions, counts, source and window.\nCorrecting today's metrics does not rewrite an earlier learning decision."),
+    ("next-post", 12, "Follow the policy into actual prose",
+     "A saved policy guides the actual opening; every fourth usable draft still explores.\nThese fixture drafts demonstrate policy behavior, not measured audience uplift."),
+    ("newsletter", 12, "A second format with room to explain",
+     "Newsletter drafts have a subject, longer sections and a worked example.\nCopy or export text and Markdown; use the saved evaluation reports to inspect quality limits."),
 ]
 
 

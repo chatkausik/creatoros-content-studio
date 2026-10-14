@@ -1,4 +1,5 @@
 export type Mode = "demo" | "live";
+export type Platform = "linkedin" | "newsletter";
 export type Source = "manual" | "simulated";
 export type Hook = "problem-first" | "outcome-first" | "question-first";
 export interface BrandProfile {
@@ -23,6 +24,8 @@ export interface Review {
   criteria?: { name: string; score: number; reason: string }[];
   requests?: { issue: string; instruction: string }[];
   approved?: boolean;
+  version?: number;
+  created_at?: string;
 }
 export interface Decision {
   id: string;
@@ -33,6 +36,14 @@ export interface Decision {
   evidence_ids?: string[];
 }
 export interface Feedback {
+  id?: string;
+  revision?: number;
+  observed_at?: string;
+  window_start?: string;
+  window_end?: string;
+  source_url?: string;
+  notes?: string;
+  timing_status?: string;
   impressions: number;
   reactions: number;
   comments: number;
@@ -46,7 +57,10 @@ export interface Post {
   brief: string;
   title: string;
   content: string;
+  platform?: Platform;
   original_draft?: string;
+  review_stale?: boolean;
+  image_stale?: boolean;
   status: string;
   hook: Hook;
   source: string;
@@ -56,6 +70,19 @@ export interface Post {
   published_at?: string;
   image_url?: string;
   image_source?: string;
+  pending_image_request?: { id: string; mode: Mode; feedback: string } | null;
+  image_error?: {
+    message: string;
+    diagnostics?: Record<string, unknown>;
+  } | null;
+  image_variants?: {
+    id: string;
+    url: string;
+    source?: string;
+    feedback?: string;
+    created_at?: string;
+  }[];
+  selected_image_variant_id?: string;
   run_id?: string;
   profile_version?: number;
   learning_version?: number;
@@ -63,17 +90,40 @@ export interface Post {
   learning_snapshot_id?: string;
   feedback?: Feedback;
   feedback_observations?: Feedback[];
-  versions?: { version: number; content: string; kind: string }[];
+  feedback_history?: Feedback[];
+  versions?: {
+    version: number;
+    content: string;
+    kind: string;
+    reason?: string;
+    created_at?: string;
+  }[];
   reviews?: Review[];
   decisions?: Decision[];
 }
+export interface Evidence extends Partial<Feedback> {
+  observation_id?: string;
+  post_id?: string;
+  post_title?: string;
+  hook?: Hook;
+  opening?: string;
+  content?: string;
+  metrics?: Partial<Feedback>;
+}
 export interface Snapshot {
+  platform?: Platform;
   id: string;
   brand_id: string;
   source: Source;
   window: string;
   version: number;
   preferred_hook: Hook | null;
+  status?: "collecting_evidence" | "early_signal" | "inconclusive";
+  thresholds?: Record<string, number | string>;
+  evidence?: Evidence[];
+  uncertainty_note?: string;
+  evidence_integrity?: string;
+  excluded?: { id: string; post_id?: string; reason: string }[];
   stats: {
     hook: Hook;
     posts: number;
@@ -81,6 +131,7 @@ export interface Snapshot {
     comments: number;
     reposts: number;
     rate: number | null;
+    interval?: [number, number] | { low: number; high: number };
   }[];
   evidence_ids: string[];
   explanation: string;

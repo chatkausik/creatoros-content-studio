@@ -8,6 +8,7 @@ import html
 import json
 import re
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -19,11 +20,11 @@ from pydantic import model_validator
 
 from . import prompts
 from .mesh import MeshClient, MeshError
-from .schemas import BrandProfile, Draft, InitialReview, RefinementReview, Revision, Strategy, VisualBrief
+from .schemas import BrandProfile, Draft, InitialReview, NewsletterDraft, NewsletterRevision, RefinementReview, Revision, Strategy, VisualBrief
 
 
 HOOKS = ("problem-first", "outcome-first", "question-first")
-PIPELINE_VERSION = "2026-10-14.4"
+PIPELINE_VERSION = "2026-10-14.5"
 _active_runs: set[str] = set()
 
 
@@ -33,6 +34,72 @@ def _now() -> str:
 
 def _json(value) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def create_run_manifest(settings, platform: str = "linkedin") -> dict:
+    """Freeze non-secret configuration and the exact prompt text used by a run."""
+    if platform not in prompts.PLATFORM_RULES:
+        raise ValueError("Choose LinkedIn or newsletter.")
+    prompt_values = {name: getattr(prompts, name) for name in ("PROFILE", "STRATEGIST", "WRITER", "EDITOR", "REVISION", "VISUAL", "VISUAL_CONSTRAINT")}
+    prompt_values["platform_rules"] = prompts.PLATFORM_RULES[platform]
+    output_schemas = {
+        "BrandProfile": BrandProfile, "Strategy": Strategy,
+        "Draft": NewsletterDraft if platform == "newsletter" else Draft,
+        "Revision": NewsletterRevision if platform == "newsletter" else Revision,
+        "InitialReview": InitialReview, "RefinementReview": RefinementReview, "VisualBrief": VisualBrief,
+    }
+    return {
+        "version": 1, "chat_model": settings.chat_model, "image_model": settings.image_model,
+        "prompt_version": prompts.PROMPT_VERSION, "pipeline_version": PIPELINE_VERSION,
+        "max_revisions": min(2, max(1, int(settings.max_revisions))), "platform": platform,
+        "prompt_hashes": {key: hashlib.sha256(value.encode()).hexdigest() for key, value in prompt_values.items()},
+        "schema_hashes": {key: hashlib.sha256(json.dumps(schema.model_json_schema(), sort_keys=True, separators=(",", ":")).encode()).hexdigest() for key, schema in output_schemas.items()},
+        "schema_coverage": "captured_at_run_creation",
+        "generation_settings": {"strategist_temperature": 0.2, "writer_temperature": 0.4, "editor_temperature": 0, "revision_temperature": 0.25, "max_tokens": 2200, "image_quality": "low", "image_size": "1024x1024"},
+        "provenance": "captured_at_run_creation",
+    }
+
+
+def frozen_settings(settings, manifest: dict):
+    """Restore recorded models without retaining credentials in a run artifact."""
+    if manifest.get("version") != 1 or manifest.get("platform", "linkedin") not in prompts.PLATFORM_RULES:
+        raise MeshError("This run has an unsupported configuration manifest. Start a new run; its saved artifacts are preserved.")
+    if any(not isinstance(manifest.get(key), str) or not manifest[key].strip() for key in ("chat_model", "image_model")) or manifest.get("max_revisions") not in (1, 2):
+        raise MeshError("This run has an incomplete configuration manifest. Start a new run; its saved artifacts are preserved.")
+    expected = create_run_manifest(settings, manifest.get("platform", "linkedin"))
+    if manifest.get("prompt_version") != prompts.PROMPT_VERSION or manifest.get("pipeline_version") != PIPELINE_VERSION:
+        raise MeshError("This saved run uses a different prompt or pipeline version. Start a new run to use the current version; its original artifacts remain intact.")
+    if manifest.get("prompt_hashes") and manifest["prompt_hashes"] != expected["prompt_hashes"]:
+        raise MeshError("The saved prompt hashes do not match this runtime. Start a new run or restore the original prompts before resuming.")
+    if manifest.get("schema_hashes") and manifest["schema_hashes"] != expected["schema_hashes"]:
+        raise MeshError("The saved output schema hashes do not match this runtime. Start a new run or restore the original schemas before resuming.")
+    if manifest.get("generation_settings") and manifest["generation_settings"] != expected["generation_settings"]:
+        raise MeshError("The saved generation settings do not match this runtime. Start a new run or restore the original settings before resuming.")
+    return replace(settings, chat_model=manifest["chat_model"], image_model=manifest["image_model"], max_revisions=manifest["max_revisions"])
+
+
+def _legacy_manifest(run: dict, settings) -> dict:
+    """Best-effort migration, explicitly recording values that were not captured."""
+    manifest = create_run_manifest(settings, run.get("platform", "linkedin"))
+    manifest.pop("schema_hashes", None)
+    manifest["schema_coverage"] = "uncaptured_legacy_configuration"
+    manifest["provenance"] = "legacy_inferred_at_resume"
+    manifest["inferred_fields"] = ["image_model", "max_revisions", "generation_settings", "prompt_hashes"]
+    if run.get("mode") == "live" and run.get("model"):
+        manifest["chat_model"] = run["model"]
+    else:
+        manifest["inferred_fields"].append("chat_model")
+    versions = {item["prompt_version"] for item in run.get("artifacts", {}).values() if item.get("prompt_version")}
+    if len(versions) > 1:
+        raise MeshError("This legacy run contains mixed prompt versions. Start a new run; all original artifacts are preserved.")
+    if versions:
+        manifest["prompt_version"] = next(iter(versions))
+    else:
+        manifest["inferred_fields"].append("prompt_version")
+    manifest["pipeline_version"] = run.get("pipeline_version", PIPELINE_VERSION)
+    if not run.get("pipeline_version"):
+        manifest["inferred_fields"].append("pipeline_version")
+    return manifest
 
 
 def _substantive(before: str, after: str) -> bool:
@@ -139,7 +206,7 @@ def _demo_topic(brief: str) -> tuple[str, str, str]:
     return topic or "better AI workflows", "a workflow that looks finished until someone tries a difficult case", "choose one concrete failure and write down what better would look like"
 
 
-def _demo_draft(brief: str, hook: str, profile: dict, revision: bool) -> dict:
+def _demo_draft(brief: str, hook: str, profile: dict, revision: bool, platform: str = "linkedin") -> dict:
     topic, failure, action = _demo_topic(brief)
     expressive = any(word in _json(profile).lower() for word in ("playful", "warm", "conversational", "story", "energetic", "metaphor"))
     opening = {
@@ -165,7 +232,24 @@ def _demo_draft(brief: str, hook: str, profile: dict, revision: bool) -> dict:
             "Keep the failure beside the improvement. A single example cannot establish reliability, but it gives the next review a concrete starting point.\n\n"
             "Repeat with a different difficult input before broadening the workflow.\n\nWhat failure would you add to your next review?"
         )
-    return {"title": topic[:1].upper() + topic[1:], "content": content}
+    title = topic[:1].upper() + topic[1:]
+    if platform == "newsletter":
+        body = content.split("\n\n", 1)[1]
+        content = (
+            f"{opening}\n\nA closer look\n\n{body}\n\n"
+            "A worked hypothetical example\n\n"
+            "Consider a support assistant asked to change a customer's delivery address. The request contains a street name but no apartment number. A confident answer might confirm the change immediately, even though the assistant has not resolved the missing detail. In this hypothetical example, the useful outcome is an accurate clarification, not a faster confirmation. Save the original request and describe what information is required before any update can happen.\n\n"
+            "Then compare two proposed responses. One invents a complete address; the other asks a focused question and waits. Both may sound helpful, so a review based on tone alone would miss the difference. Check the actual action against the required information. Record why the second response meets that requirement without claiming this one case proves broad reliability.\n\n"
+            "Try a small review this week\n\n"
+            "Choose a workflow you understand well enough to inspect. Write down one difficult input, the response you expect, and a specific behavior that would count as failure. Ask a colleague to read those notes before running the example. If you disagree about the expected behavior, resolve that ambiguity before comparing outputs. Otherwise, the evaluation may reward different goals each time.\n\n"
+            "Keep a simple record with the input, configuration, actual response and review decision. Change only one instruction for the next attempt. Compare both responses against the same expectation, including any new problem introduced by the revision. Save a short explanation of the difference so another person can inspect the decision later.\n\n"
+            "What this exercise cannot establish\n\n"
+            "A selected example is a starting point, not a representative benchmark. It may reveal a failure without estimating how often that failure occurs. More detailed review also takes time, and a change that helps one input can weaken another. Keep the earlier cases and include them in later checks rather than replacing every failure with the newest success.\n\n"
+            "Before expanding the workflow, collect a few different difficult inputs and invite a second reviewer to challenge your assumptions. The immediate next action is modest: save one inspectable case and explain what would make its response acceptable."
+        )
+        title = f"A practical guide to {topic}"[:100]
+        NewsletterDraft.model_validate({"title": title, "content": content})
+    return {"title": title, "content": content}
 
 
 def _demo_review(iteration: int) -> dict:
@@ -186,7 +270,7 @@ def _demo_review(iteration: int) -> dict:
     }
 
 
-async def generate_visual(post: dict, settings, mode: str = "live") -> dict:
+async def generate_visual(post: dict, settings, mode: str = "live", feedback: str = "", regeneration_id: str | None = None) -> dict:
     if mode == "demo":
         # Deliberate vector fixture, prominently labeled; never passed off as AI.
         title = html.escape((post.get("title") or "Your next idea")[:52])
@@ -202,14 +286,68 @@ async def generate_visual(post: dict, settings, mode: str = "live") -> dict:
         asset = Path(settings.data_dir) / "assets" / f"demo-{hashlib.sha256(svg.encode()).hexdigest()[:20]}.svg"
         asset.parent.mkdir(parents=True, exist_ok=True)
         asset.write_text(svg, encoding="utf-8")
-        return {"image_url": f"/assets/{asset.name}", "image_prompt": "Illustrative demo: a draft becoming a reviewed idea. Not AI-generated.", "model": "demo-fixture", "source": "demo"}
+        return {"image_url": f"/assets/{asset.name}", "image_prompt": "Illustrative demo: a draft becoming a reviewed idea. Not AI-generated.", "model": "demo-fixture", "requested_model": "demo-fixture", "actual_model": "demo-fixture", "source": "demo", "usage": [], "request_id": regeneration_id or f"demo-{asset.stem}", "created_at": _now(), "content_sha256": hashlib.sha256(svg.encode()).hexdigest(), "feedback": feedback, "reason": "A labeled demonstration asset; feedback is saved but this fixture does not simulate AI image regeneration."}
     client = MeshClient(settings)
-    brief = await client.complete_json(prompts.VISUAL, _json({"title": post.get("title"), "content": post.get("content")}), VisualBrief)
-    image_prompt = brief.image_prompt + "\n\n" + prompts.VISUAL_CONSTRAINT
-    result = await client.generate_image(image_prompt)
+    try:
+        brief = await client.complete_json(prompts.VISUAL, _json({"title": post.get("title"), "content": post.get("content"), "platform": post.get("platform", "linkedin"), "visual_feedback": feedback}), VisualBrief)
+        for usage in client.usage:
+            usage["stage"] = "visual_director"
+        image_prompt = brief.image_prompt + "\n\n" + prompts.VISUAL_CONSTRAINT
+        result = await client.generate_image(image_prompt, request_id=regeneration_id)
+    except MeshError as error:
+        error.diagnostics = {**(error.diagnostics or {}), "usage": deepcopy(client.usage)}
+        raise
     result["reason"] = brief.reason
-    result["usage"] = client.usage
+    result["usage"] = deepcopy(client.usage)
+    result["feedback"] = feedback
+    result["director_model"] = settings.chat_model
+    result["director_actual_model"] = next((item.get("actual_model") for item in reversed(client.usage) if item.get("stage") == "visual_director"), None)
     return result
+
+
+async def review_post(post: dict, brand_profile: dict, settings, mode: str = "live") -> dict:
+    """Review the current text without rewriting or overwriting prior judgments."""
+    platform = post.get("platform", "linkedin")
+    if platform not in prompts.PLATFORM_RULES:
+        raise ValueError("Choose LinkedIn or newsletter.")
+    draft = {"title": post["title"], "content": post["content"]}
+    (NewsletterDraft if platform == "newsletter" else Draft).model_validate(draft)
+    reviews = post.get("reviews", [])
+    iteration = max((item.get("iteration", 0) for item in reviews), default=0) + 1
+    previous_review = reviews[-1] if reviews else {}
+    versions = post.get("versions", [])
+    previous = versions[-2] if len(versions) > 1 else None
+    if mode == "demo":
+        # An authored fixture cannot truthfully score a user's newly edited text.
+        output = {
+            "criteria": [{"name": name, "score": 3, "reason": "This is a demonstration review. The edited text has not been assessed by an AI editor; a person must inspect this criterion."} for name in ("brief_fulfillment", "specificity", "clarity", "brand_fit", "factual_care")],
+            "requests": [{"issue": "The edited text has no live editorial assessment.", "instruction": "Inspect the latest opening, example, voice and factual claims against the brief; use a live review for AI-generated criterion scores."}],
+            "approved": False, "requires_human_review": True,
+        }
+        usage, actual_model = [], "demo-fixture"
+    else:
+        client = MeshClient(settings)
+        output = (await client.complete_json(prompts.EDITOR, _json({
+            "brief": post.get("brief", ""), "voice_profile": brand_profile,
+            "selected_hook": post.get("hook", "problem-first"), "platform": platform,
+            "platform_rules": prompts.PLATFORM_RULES[platform], "draft": draft,
+            "iteration": iteration,
+            "previous_draft": {"title": previous.get("title", ""), "content": previous["content"]} if previous else None,
+            "previous_requests": previous_review.get("requests", []),
+            "addressed_requests": versions[-1].get("addressed_requests", []) if versions else [],
+        }), RefinementReview, temperature=0)).model_dump()
+        output = _review_outcome(output, iteration)
+        usage = deepcopy(client.usage)
+        for item in usage:
+            item["stage"] = "manual_revision_review"
+        actual_model = usage[-1].get("actual_model") if usage else None
+    return {
+        **output, "iteration": iteration, "created_at": _now(),
+        "model": "demo-fixture" if mode == "demo" else settings.chat_model,
+        "actual_model": actual_model, "source": "demo" if mode == "demo" else "mesh",
+        "prompt_version": prompts.PROMPT_VERSION, "usage": usage,
+        "reviewed_content_sha256": hashlib.sha256(post["content"].encode()).hexdigest(),
+    }
 
 
 class PipelineState(TypedDict, total=False):
@@ -235,15 +373,28 @@ async def run_pipeline(run_id: str, store, settings) -> None:
     post_id = run["post_id"]
     mode = run.get("mode", "demo" if getattr(settings, "demo_mode", False) else "live")
     source = "demo" if mode == "demo" else "mesh"
-    model = "demo-fixture" if mode == "demo" else getattr(settings, "chat_model", "openai/gpt-4o-mini")
     try:
+        manifest = run.get("manifest")
+        if not manifest:
+            manifest = _legacy_manifest(run, settings)
+            run = store.patch("runs", run_id, {"manifest": manifest})
+            store.add_event(post_id, "coordinator", "Legacy configuration recorded", "This run predates immutable manifests. Available artifact provenance was retained; uncaptured values are explicitly marked as inferred.", [], event_id=f"{run_id}:manifest-migration")
+        elif not manifest.get("schema_hashes") and not manifest.get("schema_coverage"):
+            manifest = {**manifest, "schema_coverage": "uncaptured_legacy_configuration"}
+            run = store.patch("runs", run_id, {"manifest": manifest})
+            store.add_event(post_id, "coordinator", "Legacy schema coverage disclosed", "The original run did not capture output schema hashes. No historical hashes have been invented; existing prompt and model provenance remains intact.", [], event_id=f"{run_id}:schema-provenance")
+        settings = frozen_settings(settings, manifest)
         client = MeshClient(settings)
     except MeshError as error:
         store.patch("runs", run_id, {"status": "failed", "error": str(error), "updated_at": _now()})
         store.patch("posts", post_id, {"status": "needs_review"})
+        store.add_event(post_id, "coordinator", "Run configuration requires attention", str(error), [], event_id=f"{run_id}:manifest-error")
         _active_runs.discard(run_id)
         return
+    platform = manifest.get("platform", "linkedin")
+    model = "demo-fixture" if mode == "demo" else settings.chat_model
     client.usage.extend(run.get("usage", []))
+    stage_usage_start = len(client.usage)
     brand = store.get("brands", run["brand_id"]) or {}
     profile = run.get("profile") or brand.get("profile") or {}
     hook = run.get("selected_hook") or "problem-first"
@@ -259,21 +410,27 @@ async def run_pipeline(run_id: str, store, settings) -> None:
 
     def save_artifact(key: str, output: dict) -> dict:
         artifacts = dict(refresh_run().get("artifacts", {}))
-        actual_model = client.usage[-1].get("actual_model") if client.usage and mode == "live" else model
-        value = {"output": output, "created_at": _now(), "model": model, "actual_model": actual_model,
-                 "source": source, "prompt_version": prompts.PROMPT_VERSION}
+        for item in client.usage[stage_usage_start:]:
+            item.setdefault("stage", key)
+        usage = deepcopy(client.usage[stage_usage_start:])
+        requested_model = output["model"] if key == "visual" else model
+        actual_model = output.get("actual_model") if key == "visual" else (usage[-1].get("actual_model") if usage and mode == "live" else (model if mode == "demo" else None))
+        value = {"output": output, "created_at": _now(), "model": requested_model, "requested_model": requested_model, "actual_model": actual_model,
+                 "source": source, "prompt_version": prompts.PROMPT_VERSION, "platform": platform, "usage": usage}
         artifacts[key] = value
         store.patch("runs", run_id, {"artifacts": artifacts, "usage": client.usage, "updated_at": _now()})
         return value
 
     def stage(name: str) -> None:
+        nonlocal stage_usage_start
+        stage_usage_start = len(client.usage)
         store.patch("runs", run_id, {"stage": name, "status": "running", "updated_at": _now()})
 
     def event(key: str, node: str, choice: str, reason: str, evidence_ids: list | None = None) -> None:
         store.add_event(post_id, node, choice, reason, evidence_ids or [], event_id=f"{run_id}:{key}")
 
     def context(**extra) -> str:
-        return _json({"brief": run["brief"], "voice_profile": profile, "selected_hook": hook, **extra})
+        return _json({"brief": run["brief"], "voice_profile": profile, "selected_hook": hook, "platform": platform, "platform_rules": prompts.PLATFORM_RULES[platform], **extra})
 
     async def strategist(state: PipelineState) -> dict:
         stage("strategist")
@@ -293,7 +450,7 @@ async def run_pipeline(run_id: str, store, settings) -> None:
                 output = (await client.complete_json(prompts.STRATEGIST, context(policy_reason=run.get("strategy_reason"), evidence_ids=run.get("evidence_ids", []), learning_snapshot_id=run.get("learning_snapshot_id")), SelectedStrategy)).model_dump()
             cached = save_artifact("strategist", output)
         strategy = cached["output"]
-        store.patch("posts", post_id, {"strategy": strategy, "hook": hook, "source": source, "is_demo": mode == "demo", "profile_version": run.get("profile_version", brand.get("profile_version", 1)), "learning_version": run.get("learning_version")})
+        store.patch("posts", post_id, {"strategy": strategy, "hook": hook, "source": source, "is_demo": mode == "demo", "platform": platform, "profile_version": run.get("profile_version", brand.get("profile_version", 1)), "learning_version": run.get("learning_version")})
         event("strategist", "strategist", strategy["angle"], strategy["reason"], run.get("evidence_ids", []))
         return {"iteration": 0}
 
@@ -303,6 +460,7 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         kind = "draft" if iteration == 0 else "revision"
         version_id = f"{run_id}:version:{iteration}"
         version = {"id": version_id, "version": iteration + 1, "kind": kind, "title": output["title"], "content": output["content"], "addressed_requests": output.get("addressed_requests", []), **{key: cached[key] for key in ("created_at", "source", "model", "prompt_version")}}
+        version.update({"actual_model": cached.get("actual_model"), "usage": cached.get("usage", []), "platform": platform})
         versions = [item for item in post.get("versions", []) if item.get("id") != version_id]
         versions.append(version)
         versions.sort(key=lambda item: item.get("version", 0))
@@ -315,13 +473,15 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         stage("writer")
         cached = artifact("writer")
         if not cached:
-            class PolicyDraft(Draft):
+            draft_schema = NewsletterDraft if platform == "newsletter" else Draft
+
+            class PolicyDraft(draft_schema):
                 @model_validator(mode="after")
                 def enforce_opening_form(self):
                     _validate_hook_opening(self.content, hook)
                     return self
 
-            output = _demo_draft(run["brief"], hook, profile, False) if mode == "demo" else (await client.complete_json(prompts.WRITER, context(strategy=artifact("strategist")["output"]), PolicyDraft, temperature=0.4)).model_dump()
+            output = _demo_draft(run["brief"], hook, profile, False, platform) if mode == "demo" else (await client.complete_json(prompts.WRITER, context(strategy=artifact("strategist")["output"]), PolicyDraft, temperature=0.4)).model_dump()
             cached = save_artifact("writer", output)
         save_version(cached, 0)
         event("writer", "writer", "Original draft saved", "Draft follows the strategy and frozen brand profile. Preserved for editorial comparison.")
@@ -346,9 +506,10 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         post = store.get("posts", post_id)
         review_id = f"{run_id}:review:{iteration}"
         review = {"id": review_id, "iteration": iteration, **output, **{key: cached[key] for key in ("created_at", "source", "model", "prompt_version")}}
+        review.update({"actual_model": cached.get("actual_model"), "usage": cached.get("usage", [])})
         reviews = [item for item in post.get("reviews", []) if item.get("id") != review_id] + [review]
         reviews.sort(key=lambda item: item.get("iteration", 0))
-        store.patch("posts", post_id, {"reviews": reviews})
+        store.patch("posts", post_id, {"reviews": reviews, "review_stale": False})
         requests = output["requests"]
         reason = " ".join(item["instruction"] for item in requests) if requests else " ".join(item["reason"] for item in output["criteria"])
         event(key, "editor", "Approved after revision" if output["approved"] else f"Revision review {iteration}: {len(requests)} edit requests", reason)
@@ -365,9 +526,11 @@ async def run_pipeline(run_id: str, store, settings) -> None:
             previous = artifact("writer" if iteration == 1 else f"revision_{iteration - 1}")["output"]
             review = artifact(f"editor_{iteration - 1}")["output"]
             if mode == "demo":
-                output = {**_demo_draft(run["brief"], hook, profile, True), "addressed_requests": ["Replaced broad advice with a three-step test and explicitly hypothetical example.", "Applied the selected voice profile to the explanation and retained the chosen hook."]}
+                output = {**_demo_draft(run["brief"], hook, profile, True, platform), "addressed_requests": ["Replaced broad advice with a three-step test and explicitly hypothetical example.", "Applied the selected voice profile to the explanation and retained the chosen hook."]}
             else:
-                class SubstantiveRevision(Revision):
+                revision_schema = NewsletterRevision if platform == "newsletter" else Revision
+
+                class SubstantiveRevision(revision_schema):
                     @model_validator(mode="after")
                     def content_has_changed(self):
                         if not _substantive(previous["content"], self.content):
@@ -390,9 +553,20 @@ async def run_pipeline(run_id: str, store, settings) -> None:
         cached = artifact("visual")
         if not cached:
             output = await generate_visual(store.get("posts", post_id), settings, mode)
+            client.usage.extend(output.get("usage", []))
             cached = save_artifact("visual", output)
         image_output = cached["output"]
-        store.patch("posts", post_id, {"image_url": image_output["image_url"], "image_prompt": image_output["image_prompt"], "image_model": image_output["model"], "image_source": image_output["source"]})
+        variant_id = f"{run_id}:image:initial"
+        post = store.get("posts", post_id)
+        image_variant = {
+            **image_output, "id": variant_id, "url": image_output["image_url"],
+            "prompt": image_output["image_prompt"],
+            "asset_sha256": image_output.get("content_sha256"),
+            "content_sha256": hashlib.sha256(post["content"].encode()).hexdigest(),
+            "created_at": image_output.get("created_at", cached["created_at"]),
+        }
+        variants = [item for item in post.get("image_variants", []) if item.get("id") != variant_id] + [image_variant]
+        store.patch("posts", post_id, {"image_url": image_output["image_url"], "image_prompt": image_output["image_prompt"], "image_model": image_output["model"], "image_source": image_output["source"], "image_variants": variants, "selected_image_variant_id": variant_id})
         event("visual", "visual", "Matching visual saved", cached["output"].get("reason", cached["output"]["image_prompt"]))
         return {}
 
@@ -440,6 +614,8 @@ async def run_pipeline(run_id: str, store, settings) -> None:
     except Exception as error:
         message = str(error) if isinstance(error, MeshError) else "This run stopped unexpectedly. Completed steps are saved; retry to resume."
         diagnostics = error.diagnostics if isinstance(error, MeshError) else None
+        if diagnostics and diagnostics.get("usage"):
+            client.usage.extend(diagnostics["usage"])
         store.patch("runs", run_id, {"status": "failed", "error": message, "error_diagnostics": diagnostics, "usage": client.usage, "updated_at": _now()})
         store.patch("posts", post_id, {"status": "needs_review"})
         event("failure", "coordinator", "Run paused at a recoverable failure", message)

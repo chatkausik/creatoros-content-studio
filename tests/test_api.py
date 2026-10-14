@@ -21,7 +21,7 @@ def client(tmp_path):
 
 def import_post(client, brand_id="brand-ada", **changes):
     body = {"brand_id": brand_id, "title": "A testable workflow", "content": "A published post with concrete evidence and a useful next step.",
-            "hook": "problem-first", **changes}
+            "hook": "problem-first", "published_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(), **changes}
     response = client.post("/api/posts/import", json=body)
     assert response.status_code == 201, response.text
     return response.json()
@@ -31,7 +31,8 @@ def test_feedback_upsert_is_idempotent_and_observation_cohorts_stay_separate(cli
     post = import_post(client)
     other = import_post(client, brand_id="brand-milo")
     endpoint = f"/api/posts/{post['id']}/feedback"
-    original = {"impressions": 1000, "comments": 10, "reposts": 5, "source": "manual", "window": "24h"}
+    original = {"impressions": 1000, "comments": 10, "reposts": 5, "source": "manual", "window": "24h",
+                "observed_at": (datetime.fromisoformat(post["published_at"]) + timedelta(hours=24)).isoformat()}
     first = client.put(endpoint, json=original)
     second = client.put(endpoint, json={**original, "comments": 20})
     assert first.status_code == second.status_code == 200
@@ -40,7 +41,7 @@ def test_feedback_upsert_is_idempotent_and_observation_cohorts_stay_separate(cli
     assert client.put(endpoint, json={**original, "window": "7d", "comments": 999}).status_code == 200
     assert client.put(f"/api/posts/{other['id']}/feedback", json={**original, "comments": 999}).status_code == 200
     snapshot = client.post("/api/brands/brand-ada/learn", json={"source": "manual", "window": "24h"}).json()
-    assert snapshot["evidence_ids"] == [second.json()["id"]]
+    assert snapshot["evidence_ids"] == [second.json()["revision_id"]]
     stat = next(s for s in snapshot["stats"] if s["hook"] == "problem-first")
     assert stat["posts"] == 1
     assert stat["impressions"] == 1000
@@ -59,7 +60,7 @@ def test_run_freezes_brand_profile_and_learning_snapshot(client):
     brand["profile_version"] += 1
     store.put("brands", brand)
     for feedback in store.list("feedback"):
-        feedback["comments"] = 999 if feedback["post_id"] == "demo-history-1" else 0
+        feedback["comments"] = 999 if store.get("posts", feedback["post_id"])["hook"] == "problem-first" else 0
         feedback["reposts"] = 0
         store.put("feedback", feedback)
     new_policy = client.post("/api/brands/brand-ada/learn", json={"source": "simulated", "window": "24h"}).json()
@@ -74,7 +75,7 @@ def test_run_freezes_brand_profile_and_learning_snapshot(client):
 def test_scheduling_normalizes_timezone_and_recovers_after_restart(tmp_path):
     settings = Settings(data_dir=tmp_path, worker_enabled=False)
     with TestClient(create_app(settings)) as client:
-        assert client.post("/api/posts/demo-showcase/approve").status_code == 200
+        assert client.post("/api/posts/demo-showcase/approve", json={"acknowledge_unresolved": True}).status_code == 200
         when = datetime.now(timezone(timedelta(hours=-4))) + timedelta(hours=2)
         response = client.post("/api/posts/demo-showcase/schedule", json={"scheduled_at": when.isoformat()})
         assert response.status_code == 200
@@ -110,7 +111,8 @@ def test_invalid_transitions_and_demo_manual_feedback_rejected(client):
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     assert client.post("/api/posts/demo-showcase/schedule", json={"scheduled_at": future}).status_code == 409
     assert client.post("/api/posts/demo-showcase/publish", json={}).status_code == 409
-    assert client.post("/api/posts/demo-showcase/approve").status_code == 200
+    assert client.post("/api/posts/demo-showcase/approve").status_code == 409
+    assert client.post("/api/posts/demo-showcase/approve", json={"acknowledge_unresolved": True}).status_code == 200
     assert client.post("/api/posts/demo-showcase/schedule", json={"scheduled_at": "2099-01-01T12:00:00"}).status_code == 422
     assert client.post("/api/posts/demo-showcase/schedule", json={"scheduled_at": "2000-01-01T12:00:00Z"}).status_code == 422
     assert client.post("/api/posts/demo-showcase/publish", json={"published_at": future}).status_code == 422
@@ -130,7 +132,7 @@ def test_zero_impressions_store_safely_but_are_not_used_for_learning(client):
 
 def test_finished_post_needs_a_visual_before_scheduling(client):
     client.app.state.store.patch("posts", "demo-showcase", {"image_url": None})
-    assert client.post("/api/posts/demo-showcase/approve").status_code == 200
+    assert client.post("/api/posts/demo-showcase/approve", json={"acknowledge_unresolved": True}).status_code == 200
     when = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     response = client.post("/api/posts/demo-showcase/schedule", json={"scheduled_at": when})
     assert response.status_code == 409

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 Hook = Literal["problem-first", "outcome-first", "question-first"]
+Platform = Literal["linkedin", "newsletter"]
 
 
 class AgentOutput(BaseModel):
@@ -32,7 +33,15 @@ class Strategy(AgentOutput):
     hook: Hook
     audience: str = Field(min_length=3, max_length=300)
     outline: list[str] = Field(min_length=3, max_length=6)
-    reason: str = Field(min_length=10, max_length=800)
+    reason: str = Field(min_length=10, max_length=800, description="Concise, observable explanation of the strategy: target 200–400 characters, hard maximum 800 characters. Summarize the brief, audience and selected policy without repeating the outline or full voice profile.")
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strategy_reason_length_feedback(cls, reason):
+        if isinstance(reason, str) and len(reason.strip()) > 800:
+            size = len(reason.strip())
+            raise ValueError(f"Strategy reason currently contains {size} characters; maximum 800. Remove at least {size - 800} characters and target 200–400 characters. State the essential observable reason without repeating the outline or voice profile")
+        return reason
 
 
 class Draft(AgentOutput):
@@ -49,6 +58,29 @@ class Draft(AgentOutput):
 
 
 class Revision(Draft):
+    addressed_requests: list[str] = Field(min_length=1, max_length=8)
+
+
+class NewsletterDraft(Draft):
+    """A different format, with an email subject and developed plain-text sections."""
+    title: str = Field(min_length=3, max_length=100)
+    content: str = Field(min_length=100, max_length=10000, description="Plain-text newsletter body: target 500–550 words, strictly 400–700 words including headings. Use a concise opening, four useful sections, one worked hypothetical example, a checklist, limitations, and one closing action.")
+
+    @field_validator("content")
+    @classmethod
+    def newsletter_structure(cls, content: str) -> str:
+        words = len(content.split())
+        if not 400 <= words <= 700:
+            adjustment = f"Remove at least {words - 700} words; shorten existing sections instead of adding paragraphs" if words > 700 else f"Add at least {400 - words} words of useful explanation"
+            raise ValueError(f"Newsletter body currently contains {words} words; it must contain 400–700 words. {adjustment}. Target 500–550 words while retaining the worked example, exercise and trade-offs")
+        blocks = re.split(r"\n\s*\n", content.strip())
+        headings = [block for block in blocks[1:] if "\n" not in block and 3 <= len(block) <= 80 and not block.endswith((".", "?", "!"))]
+        if len(headings) < 3:
+            raise ValueError("Newsletter requires at least three descriptive plain-text section headings, each separated from paragraphs by blank lines")
+        return content
+
+
+class NewsletterRevision(NewsletterDraft):
     addressed_requests: list[str] = Field(min_length=1, max_length=8)
 
 
@@ -89,8 +121,16 @@ class RefinementReview(Review):
 
 
 class VisualBrief(AgentOutput):
-    image_prompt: str = Field(min_length=50, max_length=2000)
+    image_prompt: str = Field(min_length=50, max_length=2000, description="Concise image-generation prompt: target 500–1000 characters; hard maximum 2000 characters. Describe one scene, composition, palette and focal point without repeating constraints. No readable text or labeled objects.")
     reason: str = Field(min_length=10, max_length=1200)
+
+    @field_validator("image_prompt", mode="before")
+    @classmethod
+    def image_prompt_length_feedback(cls, prompt):
+        if isinstance(prompt, str) and len(prompt.strip()) > 2000:
+            size = len(prompt.strip())
+            raise ValueError(f"Image prompt currently contains {size} characters; maximum 2000. Remove at least {size - 2000} characters and target 500–1000 characters. Shorten the existing scene description instead of adding instructions")
+        return prompt
 
     @field_validator("image_prompt")
     @classmethod

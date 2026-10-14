@@ -30,6 +30,7 @@ DEMO_COVER = '''<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675
 
 def seed_demo(store):
     if store.get("meta", "demo-seed-v1"):
+        seed_additional_evidence(store)
         return
     now = datetime.now(timezone.utc)
     definitions = [
@@ -78,6 +79,9 @@ def seed_demo(store):
         })
     snapshot = build_snapshot(store.list("posts"), store.list("feedback"), "brand-ada", "simulated", "24h", 1)
     store.put("snapshots", snapshot)
+    seed_additional_evidence(store)
+    from .service import latest_snapshot
+    snapshot = latest_snapshot(store, "brand-ada", "simulated", "24h")
     original = "AI agents are changing the way we build software. It is important to evaluate them carefully. You should test your agents, track their performance, and improve them over time. With the right approach, we can build better AI systems. What do you think?"
     content = "Make your next agent change easier to trust.\n\nGive it a test it can fail.\n\nBefore adding another tool, write down one task and three things a good result must contain. Then run that same task before and after the change.\n\nStart small:\n→ Keep the input fixed.\n→ Check the tool result, not just the final answer.\n→ Save the failure alongside the success.\n\nIf the change fixes one case but breaks another, that is useful evidence. Keep both in the report.\n\nA small, repeatable evaluation tells you more than a polished screenshot.\n\nWhat is the first failure case you would put in your test set?"
     store.put("posts", {
@@ -87,7 +91,7 @@ def seed_demo(store):
         "source": "simulated", "is_demo": True, "created_at": utcnow(),
         "scheduled_at": None, "published_at": None, "image_url": "/assets/demo-cover.svg",
         "image_source": "demo", "run_id": "demo-run", "profile_version": 1,
-        "learning_version": 1, "learning_snapshot_id": snapshot["id"],
+        "learning_version": snapshot["version"], "learning_snapshot_id": snapshot["id"],
         "strategy": {"angle": "Treat each agent change as a small, repeatable experiment", "hook": "outcome-first", "audience": "Engineers building AI agents", "outline": ["Start with the outcome", "Give a three-step method", "Ask for one failure case"], "reason": snapshot["explanation"]},
         "versions": [{"version": 1, "content": original, "kind": "initial"}, {"version": 2, "content": content, "kind": "revision"}],
         "reviews": [{"criteria": [{"name": "Specificity", "score": 2, "reason": "Illustrative critique: the initial draft gives generic advice without an actionable example."}, {"name": "Brand fit", "score": 3, "reason": "Illustrative critique: replace broad claims with concrete steps."}],
@@ -103,3 +107,34 @@ def seed_demo(store):
     store.put("runs", {"id": "demo-run", "post_id": "demo-showcase", "brand_id": "brand-ada", "mode": "demo", "status": "complete", "stage": "complete", "error": None, "created_at": utcnow()})
     (store.data_dir / "assets" / "demo-cover.svg").write_text(DEMO_COVER)
     store.put("meta", {"id": "demo-seed-v1", "created_at": utcnow(), "description": "All seeded creators, posts, feedback, and illustrations are authored demonstration fixtures."})
+
+
+def seed_additional_evidence(store):
+    """Add independent authored examples; never overwrite existing user feedback."""
+    if store.get("meta", "demo-evidence-v2"):
+        return
+    now = datetime.now(timezone.utc)
+    examples = [
+        ("problem-first", "A missing trace makes a failed run hard to explain.", 18, 0),
+        ("outcome-first", "Make prompt reviews easier with one saved test case.", 48, 2),
+        ("question-first", "Which input would you save before changing this prompt?", 28, 0),
+    ]
+    for index, (hook, opening, comments, reposts) in enumerate(examples, 7):
+        identifier = f"demo-history-{index}"
+        published = now - timedelta(days=index + 2)
+        content = opening + "\n\nThis authored demonstration post illustrates an opening style. Its engagement observations are synthetic."
+        store.put("posts", {"id": identifier, "brand_id": "brand-ada", "platform": "linkedin",
+            "brief": opening, "title": opening, "content": content, "original_draft": content,
+            "status": "published_manually", "hook": hook, "source": "simulated", "is_demo": True,
+            "created_at": published.isoformat(), "published_at": published.isoformat(),
+            "scheduled_at": None, "image_url": None, "run_id": None, "profile_version": 1,
+            "learning_version": 0, "versions": [{"version": 1, "content": content, "kind": "imported_demo"}], "reviews": []})
+        store.put("feedback", {"id": f"{identifier}:simulated:24h", "post_id": identifier,
+            "brand_id": "brand-ada", "source": "simulated", "window": "24h", "impressions": 2000,
+            "comments": comments, "reposts": reposts, "reactions": comments * 3,
+            "timing_status": "simulated", "observed_at": (published + timedelta(hours=24)).isoformat(),
+            "captured_at": now.isoformat()})
+    from .service import learn
+    learn(store, "brand-ada", "simulated", "24h")
+    store.put("meta", {"id": "demo-evidence-v2", "created_at": utcnow(),
+                       "description": "Three synthetic examples per hook support the conservative demonstration policy."})

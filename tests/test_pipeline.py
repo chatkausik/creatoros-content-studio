@@ -234,3 +234,163 @@ def test_post_schema_rejects_content_over_linkedin_limit():
         Draft.model_validate({"title": "Too long", "content": "x" * 3001})
     with pytest.raises(ValidationError):
         Revision.model_validate({"title": "Too long", "content": "x" * 3001, "addressed_requests": ["Expanded example"]})
+
+
+@pytest.mark.parametrize("invalid", [{"data": []}, {"data": [None]}, {"data": [{"b64_json": "invalid!"}]}, {"data": [{"b64_json": base64.b64encode(b"not an image").decode()}]}])
+def test_unusable_image_response_does_not_poison_future_attempts(tmp_path, invalid):
+    image = b"\x89PNG\r\n\x1a\n" + b"valid example"
+    client = MeshClient(Settings(data_dir=tmp_path, mesh_api_key="fake-key"))
+    client._post = AsyncMock(side_effect=[invalid, {"data": [{"b64_json": base64.b64encode(image).decode()}], "model": "image-model-returned"}])
+    with pytest.raises(MeshError) as failure:
+        asyncio.run(client.generate_image("A visual metaphor"))
+    assert failure.value.diagnostics["image_retry_action"] == "regenerate"
+    assert not list((tmp_path / "mesh_cache").glob("image-response-*.json"))
+    result = asyncio.run(client.generate_image("A visual metaphor"))
+    assert client._post.await_count == 2
+    assert client._post.await_args_list[-1].kwargs["cache"] is False
+    assert result["actual_model"] == "image-model-returned"
+    assert (tmp_path / result["image_url"].lstrip("/")).read_bytes() == image
+
+
+def test_transient_image_download_reuses_paid_response(tmp_path, monkeypatch):
+    from backend.creatoros import mesh
+
+    image = b"\x89PNG\r\n\x1a\n" + b"valid example"
+    client = MeshClient(Settings(data_dir=tmp_path, mesh_api_key="fake-key"))
+    client._post = AsyncMock(return_value={"data": [{"url": "https://images.example.test/saved.png"}], "model": "returned-image-model", "usage": {"cost_usd": 0.01}})
+    normalize = AsyncMock(side_effect=[mesh.ImageDownloadError("Transient fetch failure"), image])
+    monkeypatch.setattr(mesh, "normalize_image", normalize)
+    with pytest.raises(MeshError) as failure:
+        asyncio.run(client.generate_image("A visual metaphor", request_id="variant-one"))
+    assert failure.value.diagnostics["image_retry_action"] == "retry_download"
+    result = asyncio.run(client.generate_image("A visual metaphor", request_id="variant-one"))
+    assert client._post.await_count == 1
+    assert normalize.await_count == 2
+    assert result["usage"][0]["download_retry"]
+    assert result["actual_model"] == "returned-image-model"
+    assert sum(item.get("cost_usd", 0) for item in client.usage) == 0.01
+
+
+def test_image_regeneration_has_distinct_identity_and_gateway_cache_bypass(tmp_path):
+    def response(suffix):
+        return {"model": "actual-image-model", "data": [{"b64_json": base64.b64encode(b"\x89PNG\r\n\x1a\n" + suffix).decode()}]}
+
+    client = MeshClient(Settings(data_dir=tmp_path, mesh_api_key="fake-key"))
+    client._post = AsyncMock(side_effect=[response(b"one"), response(b"two")])
+    first = asyncio.run(client.generate_image("Same prompt", request_id="one"))
+    repeated = asyncio.run(client.generate_image("Same prompt", request_id="one"))
+    second = asyncio.run(client.generate_image("Same prompt", request_id="two"))
+    assert repeated["image_url"] == first["image_url"]
+    assert repeated["cache_hit"]
+    assert first["image_url"] != second["image_url"]
+    assert first["request_id"] != second["request_id"]
+    assert client._post.await_count == 2
+    assert all(call.kwargs["cache"] is False for call in client._post.await_args_list)
+    assert (tmp_path / first["image_url"].lstrip("/")).exists()
+
+
+def test_resume_uses_frozen_models_after_settings_change(tmp_path, monkeypatch):
+    from backend.creatoros import pipeline
+
+    store, settings = setup_studio(tmp_path)
+    settings.chat_model, settings.image_model = "chat-original", "image-original"
+    run = make_run(store, settings)
+    store.patch("runs", run["id"], {"manifest": pipeline.create_run_manifest(settings)})
+    original_client = pipeline.MeshClient
+    recorded = []
+
+    def capture_client(config):
+        recorded.append((config.chat_model, config.image_model, config.max_revisions))
+        return original_client(config)
+
+    original_review = pipeline._demo_review
+    monkeypatch.setattr(pipeline, "MeshClient", capture_client)
+    monkeypatch.setattr(pipeline, "_demo_review", lambda _: (_ for _ in ()).throw(RuntimeError("interrupt")))
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    original_draft = store.get("posts", run["post_id"])["original_draft"]
+    settings.chat_model, settings.image_model, settings.max_revisions = "chat-new", "image-new", 1
+    monkeypatch.setattr(pipeline, "_demo_review", original_review)
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    assert recorded == [("chat-original", "image-original", 2)] * 2
+    assert store.get("runs", run["id"])["status"] == "complete"
+    assert store.get("posts", run["post_id"])["original_draft"] == original_draft
+    assert settings.chat_model == "chat-new"
+
+
+def test_changed_prompt_blocks_resume_without_touching_saved_artifacts(tmp_path, monkeypatch):
+    from backend.creatoros import pipeline
+
+    store, settings = setup_studio(tmp_path)
+    run = make_run(store, settings)
+    store.patch("runs", run["id"], {"manifest": pipeline.create_run_manifest(settings), "artifacts": {"existing": {"output": {"keep": "original"}}}})
+    monkeypatch.setattr(pipeline.prompts, "WRITER", pipeline.prompts.WRITER + "Changed prompt.")
+    call = AsyncMock()
+    monkeypatch.setattr(MeshClient, "complete_json", call)
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    saved = store.get("runs", run["id"])
+    assert saved["status"] == "failed"
+    assert "prompt hashes" in saved["error"]
+    assert saved["artifacts"] == {"existing": {"output": {"keep": "original"}}}
+    call.assert_not_awaited()
+
+
+def test_legacy_resume_discloses_inferred_manifest(tmp_path):
+    store, settings = setup_studio(tmp_path)
+    run = make_run(store, settings)
+    run.pop("manifest", None)
+    store.put("runs", run)
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    saved = store.get("runs", run["id"])
+    assert saved["status"] == "complete"
+    assert saved["manifest"]["provenance"] == "legacy_inferred_at_resume"
+    assert "image_model" in saved["manifest"]["inferred_fields"]
+    assert any(event["choice"] == "Legacy configuration recorded" for event in store.list("events", post_id=run["post_id"]))
+
+
+def test_visual_artifact_uses_image_model_and_includes_director_usage(tmp_path, monkeypatch):
+    from backend.creatoros import pipeline
+
+    store, settings = setup_studio(tmp_path)
+    run = make_run(store, settings)
+    store.patch("runs", run["id"], {"generate_image": True})
+    visual = {"image_url": "/assets/example.png", "image_prompt": "A matching scene", "model": "requested-image", "actual_model": "actual-image", "source": "mesh", "usage": [{"stage": "visual_director", "model": "requested-chat", "actual_model": "actual-chat", "total_tokens": 10}, {"stage": "image_generation", "model": "requested-image", "actual_model": "actual-image"}]}
+    monkeypatch.setattr(pipeline, "generate_visual", AsyncMock(return_value=visual))
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    saved = store.get("runs", run["id"])
+    artifact = saved["artifacts"]["visual"]
+    assert artifact["model"] == "requested-image"
+    assert artifact["actual_model"] == "actual-image"
+    assert artifact["usage"] == visual["usage"]
+    assert saved["usage"] == visual["usage"]
+    post = store.get("posts", run["post_id"])
+    assert post["image_variants"][0]["actual_model"] == "actual-image"
+    assert post["selected_image_variant_id"] == post["image_variants"][0]["id"]
+
+
+def test_newsletter_is_developed_format_with_preserved_hook_and_revision(tmp_path):
+    from backend.creatoros.pipeline import create_run_manifest
+    from backend.creatoros.schemas import NewsletterDraft
+
+    store, settings = setup_studio(tmp_path)
+    run = create_run(store, settings, {"brand_id": "brand-ada", "brief": "Explain practical AI evaluations", "mode": "demo", "platform": "newsletter", "use_learning": False})
+    store.patch("runs", run["id"], {"platform": "newsletter", "manifest": create_run_manifest(settings, "newsletter")})
+    asyncio.run(run_pipeline(run["id"], store, settings))
+    saved = store.get("runs", run["id"])
+    assert saved["status"] == "complete", saved.get("error")
+    post = store.get("posts", run["post_id"])
+    NewsletterDraft.model_validate({"title": post["title"], "content": post["content"]})
+    assert post["platform"] == "newsletter"
+    assert 400 <= len(post["content"].split()) <= 700
+    assert "A worked hypothetical example\n\n" in post["content"]
+    assert "What this exercise cannot establish\n\n" in post["content"]
+    assert post["content"].startswith("The hard part")
+    assert _substantive(post["original_draft"], post["content"])
+    assert all(item["platform"] == "newsletter" for item in post["versions"])
+
+
+def test_newsletter_rejects_relabelled_short_social_post():
+    from backend.creatoros.schemas import NewsletterDraft
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="400–700 words"):
+        NewsletterDraft.model_validate({"title": "A newsletter subject", "content": "A concrete example. " * 30})

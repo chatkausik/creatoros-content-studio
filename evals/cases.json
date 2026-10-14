@@ -1,31 +1,225 @@
 {
-  "version": 1,
-  "provenance": "Held-out synthetic briefs and demonstration brands. These are evaluation fixtures, not the user's posts or audience performance.",
+  "version": 2,
+  "provenance": "Authored synthetic benchmark with historical smoke cases and a fresh 24-pair suite. Fictional voices and simulated feedback; these are not audience outcomes.",
   "profiles": [
-    {"brand_id": "brand-ada", "label": "Ada · precise technical teacher"},
-    {"brand_id": "brand-milo", "label": "Milo · warm conversational builder"}
+    {
+      "brand_id": "brand-ada",
+      "label": "Ada · precise technical teacher"
+    },
+    {
+      "brand_id": "brand-milo",
+      "label": "Milo · warm conversational builder"
+    }
   ],
   "briefs": [
     {
       "id": "eval-retrieval",
       "brief": "Write a LinkedIn post for engineers explaining why a retrieval system needs an evaluation set before another prompt tweak. Include one practical first step and a concrete failure to inspect. Do not claim measured improvements or invent personal experience.",
-      "topic": "Retrieval evaluation before prompt tuning"
+      "topic": "Retrieval evaluation before prompt tuning",
+      "suite": "smoke",
+      "platform": "linkedin"
     },
     {
       "id": "eval-safety",
       "brief": "Write a LinkedIn post for product builders about adding human approval before an AI agent performs an irreversible action. Explain a concrete example and one implementation step. Avoid fearmongering and invented statistics.",
-      "topic": "Human approval for irreversible agent actions"
+      "topic": "Human approval for irreversible agent actions",
+      "suite": "smoke",
+      "platform": "linkedin"
     },
     {
       "id": "eval-observability",
       "brief": "Write a LinkedIn post for small engineering teams about recording tool inputs, outputs, and failures when debugging an AI workflow. Give a specific debugging example and a small change a team can make today. Do not invent customer outcomes.",
-      "topic": "Observable tool calls in AI workflows"
+      "topic": "Observable tool calls in AI workflows",
+      "suite": "smoke",
+      "platform": "linkedin"
     },
     {
       "id": "eval-feedback",
       "brief": "Write a LinkedIn post for technical creators explaining why impressions alone cannot tell them which content was useful. Recommend an explicit metric and a consistent observation window, and mention one limitation of comparing a few posts. Do not claim causation from engagement.",
-      "topic": "Learning carefully from audience feedback"
+      "topic": "Learning carefully from audience feedback",
+      "suite": "smoke",
+      "platform": "linkedin"
+    },
+    {
+      "id": "fresh-privacy",
+      "topic": "Privacy in shared AI traces",
+      "brief": "Write a LinkedIn post. Explain to small engineering teams how to remove personal information from AI traces before sharing a bug report. Give a concrete redaction example, one useful field to retain, and one limitation of redaction. Never include real personal details. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters. Include exactly three short bullet points.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true,
+        "min_bullets": 3,
+        "max_bullets": 3
+      }
+    },
+    {
+      "id": "fresh-accessibility",
+      "topic": "Accessible content visuals",
+      "brief": "Write a LinkedIn post. Explain to technical creators how to write useful alt text for an AI-generated diagram. Include one original short alt-text example and explain why a list of colors alone is inadequate. Do not invent accessibility compliance claims. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-rollback",
+      "topic": "Reversible prompt releases",
+      "brief": "Write a LinkedIn post. Explain why a prompt release should have a rollback path. Describe one observable rollback trigger, a saved prior version, and a verification step after rollback. Treat these as suggestions rather than proven results. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-batch-cost",
+      "topic": "Cost visibility in batch jobs",
+      "brief": "Write a LinkedIn post. Explain to engineering teams why an AI batch job needs an explicit request budget. Include a hypothetical example labeled hypothetical, a stopping condition, and a way to record spend uncertainty. Do not invent provider prices or promise savings. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters. Include exactly three short bullet points.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true,
+        "min_bullets": 3,
+        "max_bullets": 3
+      }
+    },
+    {
+      "id": "fresh-timeouts",
+      "topic": "Ambiguous tool timeouts",
+      "brief": "Write a LinkedIn post. Explain to product builders what can go wrong when retrying a tool after an ambiguous timeout. Use a hypothetical calendar event example, describe an idempotency key, and distinguish a retry from confirmation that the action failed. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-versioning",
+      "topic": "Versioned evaluation inputs",
+      "brief": "Write a LinkedIn post. Explain to data teams why an evaluation dataset must be versioned alongside a prompt. Give one concrete example of a changed input invalidating a before/after comparison, and one artifact to save. Do not claim measured gains. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-stale-data",
+      "topic": "Source freshness in retrieval",
+      "brief": "Write a LinkedIn post. Explain how an AI assistant should handle an outdated source. Give an example involving an old product manual, one visible uncertainty statement, and a check a reviewer can perform. Do not cite imaginary documents or sources. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters. Include exactly three short bullet points.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true,
+        "min_bullets": 3,
+        "max_bullets": 3
+      }
+    },
+    {
+      "id": "fresh-duplicate-feedback",
+      "topic": "Avoid duplicate engagement observations",
+      "brief": "Write a LinkedIn post. Explain why importing the same post metrics twice should not double the evidence for a content policy. Give an example involving two measurements of one post, specify a consistent observation window, and distinguish a revision from a new post. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-dataset-consent",
+      "topic": "Permission for voice samples",
+      "brief": "Write a LinkedIn post. Explain to creators why they should check permission before importing someone else's writing into a voice tool. Give one practical consent-recording step and a respectful alternative if permission is absent. Avoid legal advice and categorical legal claims. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-multilingual",
+      "topic": "Multilingual evaluation gaps",
+      "brief": "Write a LinkedIn post. Explain to a small product team why English-only examples cannot establish reliability for a multilingual assistant. Give a specific failure to inspect and one small first evaluation step. Do not invent accuracy percentages or stereotype speakers. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters. Include exactly three short bullet points.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true,
+        "min_bullets": 3,
+        "max_bullets": 3
+      }
+    },
+    {
+      "id": "fresh-error-logs",
+      "topic": "Useful error messages",
+      "brief": "Write a LinkedIn post. Explain how to make an AI workflow error useful without exposing secrets. Include a sanitized example with an error code and stage, name one piece of sensitive information to omit, and show an action the operator can take. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
+    },
+    {
+      "id": "fresh-uncertainty",
+      "topic": "Small samples and decisions",
+      "brief": "Write a LinkedIn post. Explain why three unusually successful posts do not prove a new content strategy works. Include one possible confound, one comparison to make, and a reason to keep exploring. Do not promise engagement uplift or use causal language for correlation. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters.",
+      "suite": "fresh",
+      "platform": "linkedin",
+      "constraints": {
+        "min_words": 80,
+        "max_words": 150,
+        "max_characters": 1500,
+        "max_hashtags": 0,
+        "plain_text": true
+      }
     }
   ],
-  "feedback_ablation_briefs": ["eval-safety", "eval-feedback"]
+  "feedback_ablation_briefs": [
+    "eval-safety",
+    "eval-feedback"
+  ],
+  "voice_check_brief": "Write a LinkedIn post about why an AI team should keep one difficult example in its weekly review. Include a concrete suggested action. Do not invent personal experience, statistics, or customer results. Use plain text and at most 160 words."
 }

@@ -1,0 +1,181 @@
+{
+  "kind": "post_benchmark_targeted_schema_validation",
+  "created_at": "2026-10-14T19:19:10.176546+00:00",
+  "source_report": "fresh/results.json",
+  "source_case_id": "fresh-privacy-brand-ada",
+  "source_case_sha256": "b8617a84b15d27cccff6ee08971946e352021c1af12981e8eb59e58619a86ebb",
+  "preserved_failure": {
+    "error": "GenerationFailure: Mesh returned invalid structured output twice (SelectedStrategy). The failed step can be retried.",
+    "error_diagnostics": {
+      "schema": "SelectedStrategy",
+      "attempt": 2,
+      "errors": [
+        {
+          "type": "string_too_long",
+          "loc": [
+            "reason"
+          ],
+          "msg": "String should have at most 800 characters"
+        }
+      ],
+      "diagnostic_id": "217b51b08a4529f9ed13e5fecd26af43ae99eb4deaddc542ecae14b4df913b8d"
+    },
+    "run_id": "20eba6f1-eca0-4273-b428-ad8751e28fda"
+  },
+  "change": "Strategy.reason now targets 200–400 characters with a hard 800-character cap; validation reports actual length and required reduction. The original strategist prompt and frozen inputs are unchanged.",
+  "interpretation": "This is one strategist-only schema verification after a fix. It does not rerun the content pipeline, alter the original failed benchmark case, add a judge score, or count as an independent quality improvement result.",
+  "budget": {
+    "strategist_operations": 1,
+    "max_requests_with_bounded_schema_correction": 2,
+    "pipeline_reruns": 0,
+    "judge_calls": 0
+  },
+  "manifest": {
+    "version": 1,
+    "chat_model": "openai/gpt-5.1",
+    "image_model": "openai/gpt-image-1-mini",
+    "prompt_version": "2026-10-14.5",
+    "pipeline_version": "2026-10-14.5",
+    "max_revisions": 2,
+    "platform": "linkedin",
+    "prompt_hashes": {
+      "PROFILE": "63afc79966ce127b32b3332181bb80e9dc73f3d9dc4b01e890114b641152f7b8",
+      "STRATEGIST": "7d443e07a0b6fda2ee98da05d9a88ea4e7bbd016c50a975de725d588a7f4f51c",
+      "WRITER": "858f12e9cb8262152e0531ea9627571e102719430f5565ccc9aeb39808dffc8b",
+      "EDITOR": "06dba8a8b4057fa85bc9828f8238e87f420de6bf38b3f06776f17f20c1b9fa06",
+      "REVISION": "f92a5aabebf943290f201f36e4c048f5f7ae77a89c9b00b054b8dcdd0c831b07",
+      "VISUAL": "e51b682742be5bc89e86c672153835ed4150853cb79ba77894f4cbf53f3a6e56",
+      "VISUAL_CONSTRAINT": "be21f73926aa4848b8815e8709fd3ddb28766bdc21f31608ba0c4cff1c8b1005",
+      "platform_rules": "c0036496b69647983a7c2f61c08a07e772b149c8e7f5003e311cc0edb502028f"
+    },
+    "schema_hashes": {
+      "BrandProfile": "2ef247da33b3b77fe30bf82b63f92b097afd3d472ab1fce9bf258e30fe184ea5",
+      "Strategy": "5cdb7d8bc17079204ebf6c08f7f249cb418d1624a1233b63fb0300efb68c67c5",
+      "Draft": "43d01257393d457e251860c454f5bd515f5c1b9d2e6c5dcd783dc07ceb2eec8c",
+      "Revision": "0093320e7d5dc10ec12db099fd11a6e2d4f055350c82ce61eae69619adda93f4",
+      "InitialReview": "5395ecc9975779e211bc2c668deb00faffb8f721836e925c26589c816a4c3033",
+      "RefinementReview": "f41cad7b0b793dd2c15a9493a186190411f93dde83194db5d8ad4bcf685129e7",
+      "VisualBrief": "d3cafa2ccbb8c046a67e6b17e15ceb8ffe2af865b6ff5a66aed3083d65ed8e3c"
+    },
+    "schema_coverage": "captured_at_run_creation",
+    "generation_settings": {
+      "strategist_temperature": 0.2,
+      "writer_temperature": 0.4,
+      "editor_temperature": 0,
+      "revision_temperature": 0.25,
+      "max_tokens": 2200,
+      "image_quality": "low",
+      "image_size": "1024x1024"
+    },
+    "provenance": "captured_at_run_creation"
+  },
+  "frozen_input": {
+    "brief": "Write a LinkedIn post. Explain to small engineering teams how to remove personal information from AI traces before sharing a bug report. Give a concrete redaction example, one useful field to retain, and one limitation of redaction. Never include real personal details. Use plain text, no hashtags, and 80–150 words; stay under 1,500 characters. Include exactly three short bullet points.",
+    "voice_profile": {
+      "tone": "Calm, analytical, and instructive. The voice is confident without hype, focused on clear thinking and disciplined practice. It often nudges the reader with gentle prompts or questions rather than imperatives alone, and stays grounded in observable behavior rather than abstractions.",
+      "style": "Compact and modular. Sentences are short and declarative, often stacked in sequences of three to five to build a process or argument. Paragraphs are usually a single tight block organized as step-by-step guidance or a principle followed by how to apply it. The writing favors parallel structure (\"Save… Write down… Then test…\"), contrasts (\"before it is\"), and punchy closing lines that restate the main point or pose a direct question.",
+      "vocabulary": [
+        "failure case",
+        "task",
+        "input",
+        "test",
+        "repeatable check",
+        "retrieval",
+        "filtering problem",
+        "retrieved passages",
+        "measurements",
+        "tool",
+        "success condition",
+        "agent",
+        "complexity",
+        "boundary",
+        "behavior"
+      ],
+      "avoid": [
+        "Long, meandering paragraphs or storytelling digressions",
+        "Emotional language, hype, or exaggerated claims",
+        "Vague advice without concrete actions or artifacts (e.g., tests, inputs, examples)",
+        "Overly technical jargon beyond what’s needed to explain the process",
+        "Personal anecdotes or self-focused commentary",
+        "Marketing-style calls to action or sales language"
+      ],
+      "evidence": [
+        {
+          "trait": "Short, declarative sentences",
+          "quote": "Pick one task. Save the input. Write down what a good answer must contain. Then test the same input after every change."
+        },
+        {
+          "trait": "Analytical, principle-first framing",
+          "quote": "Retrieval is a filtering problem before it is a writing problem."
+        },
+        {
+          "trait": "Process-focused, stepwise guidance",
+          "quote": "Start with one tool and one success condition. Give your agent a narrow job, a time limit, and a way to stop."
+        },
+        {
+          "trait": "Grounding abstract ideas in concrete artifacts (inputs, tests)",
+          "quote": "Save the input that broke your boundary. Add it to the test set. Run it when the prompt changes."
+        },
+        {
+          "trait": "Skepticism of surface-level wins or aesthetics",
+          "quote": "The point is to learn where the system is dependable, not to collect good-looking answers."
+        },
+        {
+          "trait": "Preference for small, repeatable checks over impressive one-offs",
+          "quote": "A small, repeatable check is more useful than an impressive screenshot."
+        },
+        {
+          "trait": "Encourages measurement separation and clarity",
+          "quote": "Inspect the retrieved passages first. Then inspect the answer. Keep those two measurements separate."
+        }
+      ],
+      "summary": "This voice is that of a pragmatic, systems-minded practitioner. It speaks in tight, declarative lines that turn abstract AI concepts into concrete workflows: name failures, save inputs, define success conditions, add them to a test set, compare before and after. The tone is calm and disciplined, preferring small, repeatable checks over flashy wins and emphasizing boundaries, behavior, and dependability. Advice is specific and procedural, with minimal jargon and no storytelling fluff. Each passage typically advances one clear idea, then shows how to operationalize it through simple, repeatable steps."
+    },
+    "selected_hook": "outcome-first",
+    "platform": "linkedin",
+    "platform_rules": "Write a standalone LinkedIn post, generally 120–220 words and at most 3,000 characters. Use short paragraphs and one actionable idea or example. Return a short internal title; never repeat that title inside content. No Markdown formatting or engagement bait. Plain bullets, bare URLs and voice-appropriate emojis are allowed.",
+    "policy_reason": "Early signal: outcome-first has 24.7 comments + reposts per 1,000 impressions across 3 posts, with a separated descriptive range. Prefer it while exploring every fourth usable draft. This is an association, not causal proof.",
+    "evidence_ids": [
+      "demo-history-1:simulated:24h",
+      "demo-history-2:simulated:24h",
+      "demo-history-3:simulated:24h",
+      "demo-history-4:simulated:24h",
+      "demo-history-5:simulated:24h",
+      "demo-history-6:simulated:24h",
+      "demo-history-7:simulated:24h",
+      "demo-history-8:simulated:24h",
+      "demo-history-9:simulated:24h"
+    ],
+    "learning_snapshot_id": "ba3f0746-f871-4b9a-9ebb-f303c262f422"
+  },
+  "status": "complete",
+  "output": {
+    "angle": "Practical redaction workflow for AI bug traces in small engineering teams",
+    "hook": "outcome-first",
+    "audience": "Leads and engineers in small product teams who share AI-related logs or traces when reporting bugs and want a simple, dependable way to remove personal information without destroying diagnostic value",
+    "outline": [
+      "Open with the outcome: share AI bug traces confidently because sensitive details are stripped while useful context remains",
+      "Define the specific artifact: an AI trace / log snippet being pasted into a bug report, and why it often leaks personal data",
+      "Walk through a concrete redaction example using obviously fake stand‑ins and show before/after transformation",
+      "Call out one key field to keep for debugging value (e.g., timestamp + anonymized user or session ID) and why it helps as a repeatable check",
+      "Highlight one limitation of redaction (can’t fully de-anonymize free‑text or derived signals, residual re-identification risk) to keep expectations realistic",
+      "Close with a compact, stepwise mental checklist teams can apply before sharing traces"
+    ],
+    "reason": "Outcome-first fits LinkedIn and the brief: small teams want a simple way to share AI bug traces safely without losing debugging value. The brand voice is procedural and artifact-focused, so I frame this as a concrete workflow with one example, one “keep” field, and one limitation. No learning snapshot details are provided, so this is an initial exploration aligned with prior outcome-first performance guidance."
+  },
+  "reason_characters": 413,
+  "hook_preserved": true,
+  "usage": [
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 5.739,
+      "prompt_tokens": 1585,
+      "completion_tokens": 304,
+      "total_tokens": 1889
+    }
+  ],
+  "finished_at": "2026-10-14T19:19:15.918293+00:00"
+}

@@ -6,7 +6,9 @@ The challenge's source requirements are in [requirement.md](../requirement.md). 
 
 The separate [opening retry workflow](../.github/workflows/agent-arena-opening-retry.yml) schedules a rerun at 03:43 UTC on October 15, with 04:43 and 05:43 UTC fallbacks. GitHub may delay scheduled jobs. It selects the official push run for the current `main` commit, waits for its actual result, and disables itself only after success (or after the submission window closes). It requires no Mesh or submission secrets. The organizer workflow remains byte-for-byte unchanged. A manual run before opening only reports that it is waiting; it does not establish eligibility.
 
-The final live report scores all eight pairs after artifact recovery, preserves the original four first-attempt failures, and passes both actual-opening ablations. Read the [qualitative review](../evals/REVIEW.md) alongside the numbers.
+The upgraded evaluation adds 24 fresh pairs, learned fictional voices, a separately configured judge, exact format checks, and correct/swapped/neutral voice comparisons. Read the [fresh first-attempt report](../evals/fresh/RESULTS.md) and [qualitative review](../evals/fresh/REVIEW.md) alongside any subsequent operational recovery. The preserved [earlier eight-pair report](../evals/RESULTS.md) describes the earlier build; it is not evidence that every new constraint passes.
+
+**Upgrade verification:** 151 local regression tests, the production frontend build, all eight fixture cases, and the local submission preflight passed. [Transport-only benchmark recovery](../evals/fresh-recovered/RESULTS.md) scored 23/24 pairs, retaining the original strategy failure: 4.817 → 4.913, eight wins, twelve ties, three regressions. Its descriptive interval includes zero; fifteen final drafts miss an exact brief constraint. Both actual-opening comparisons and policy reversal pass. [Targeted fixes](../evals/UPGRADE_VALIDATION.md) separately verify newsletter length, image regeneration and the previously failing strategy explanation, with raw attempts and actual Mesh images retained.
 
 | Requirement | Implemented evidence |
 |---|---|
@@ -14,17 +16,18 @@ The final live report scores all eight pairs after artifact recovery, preserves 
 | At least three distinct agents | Separate strategist, writer, editor, and visual prompts in a named LangGraph pipeline |
 | Genuine editorial refinement | Original text, concrete requests, substantive revisions, linked changes, and preserved decision events |
 | Learned brand voice | Multi-sample profile extraction with grounded quotes; two reproducible fixture voices and eight authentic samples in private local data |
-| Matching visuals and scheduling | Mesh image generation, stored local assets, approval, timezone-aware queue, restart recovery, and manual publication confirmation |
-| Performance learning | Versioned hook preferences from scoped observations, exploration, evidence links, and subsequent run consumption |
-| Audit trail | Content-linked strategy, editorial, visual, scheduling, publication, and learning decisions |
-| Self-evaluation with numbers | [Current report](../evals/RESULTS.md), [initial report](../evals/history/initial/RESULTS.md), [first strict report](../evals/history/strict-first/RESULTS.md), raw cases, and reproducible evaluation script |
+| Matching visuals and scheduling | Mesh image generation, saved image variants and regeneration feedback, renewed human approval, timezone-aware queue, restart recovery, and manual publication confirmation |
+| Performance learning | Platform/source/window-scoped cohorts, minimum evidence and exposure, descriptive ranges, continued exploration, frozen observations, and actual next openings |
+| Audit trail | Frozen run manifests, immutable feedback revisions, manual text versions/rechecks, and content-linked decisions |
+| Self-evaluation with numbers | [Fresh first attempt](../evals/fresh/RESULTS.md), [transport recovery](../evals/fresh-recovered/RESULTS.md), [targeted fix verification](../evals/UPGRADE_VALIDATION.md), preserved historical failures, raw cases, and resumable evaluation script |
+| Platform adaptation bonus | LinkedIn plain text up to 3,000 characters; newsletter subject and 400–700-word body with developed sections; Markdown export |
 | Submission package | Source, manifests, [README](../README.md), [design note](DESIGN.md), unchanged organizer workflow, and separate regression-test workflow |
-| Optional demo | [75-second captioned screenshot walkthrough](demo.mp4), with fixture provenance disclosed; no deployed URL is claimed |
+| Optional demo | [Captioned screenshot walkthrough](demo.mp4), with fixture provenance disclosed; no deployed URL is claimed |
 
 ## Before the final commit
 
-1. Finish the corrected live evaluation. Inspect its completion rate, failed-case diagnostics, and both actual-opening ablations. Resolve or disclose failures; do not present the earlier 7-win result as a pass for later code.
-2. Inspect at least two saved draft/revision pairs and record the reviewer and observations. Keep the original and strict historical reports.
+1. Inspect the fresh evaluation's completion rate, exact constraint failures, failed-case diagnostics, opening ablations, and voice checks. Read first-attempt and recovery results together; do not present favorable averages without their denominator.
+2. Three saved draft/revision pairs, including a regression, have a [Codex-assisted review](../evals/fresh/REVIEW.md). Add a human review before presenting quality claims; the assistant review is explicitly not independent human evidence. Keep all historical reports.
 3. Run the frontend build, regression suite, and local submission preflight using the README commands. A fixture rerun should use `--output /tmp/creatoros-fixture-evaluation` so it does not replace live evidence.
 4. Review staged paths before committing. Include source, `frontend/package-lock.json`, direct dependency constraints, reports, and demo artifacts. Keep `.env`, `data/`, SQLite files, generated caches, and the virtual environment excluded.
 
@@ -37,3 +40,5 @@ The final live report scores all eight pairs after artifact recovery, preserves 
 5. Submit the public repository URL and, if accepted by the submission form, a hosted copy of the short demo. A deployed application URL is optional for this challenge.
 
 CreatorOS's own CI does not use AI credentials or spend Mesh credits. The organizer's workflow performs its required key-validity check using the repository secret. Local tests alone do not establish remote eligibility.
+
+Automatic LinkedIn publishing and analytics ingestion remain optional work requiring the creator's platform app access. This release supports manual publishing, declared measurement times, comparable observation windows, and collection reminders. No external posts or newsletters are sent by this implementation.

@@ -1,0 +1,569 @@
+{
+  "kind": "bounded_live_integration_smoke",
+  "generated_at": "2026-10-14T19:03:21.818662+00:00",
+  "fictional_brand": "Ada Chen",
+  "brand_profile_source": "Authored fictional demonstration profile",
+  "purpose": "One live newsletter pipeline and, only if its initial image succeeds, one explicit visual regeneration. This is an integration check, not a quality benchmark or an audience experiment.",
+  "budget": {
+    "pipeline_runs": 1,
+    "additional_visual_attempts": 1,
+    "semantic_rerolls": 0
+  },
+  "manifest": {
+    "version": 1,
+    "chat_model": "openai/gpt-5.1",
+    "image_model": "openai/gpt-image-1-mini",
+    "prompt_version": "2026-10-14.5",
+    "pipeline_version": "2026-10-14.5",
+    "max_revisions": 2,
+    "platform": "newsletter",
+    "prompt_hashes": {
+      "PROFILE": "63afc79966ce127b32b3332181bb80e9dc73f3d9dc4b01e890114b641152f7b8",
+      "STRATEGIST": "7d443e07a0b6fda2ee98da05d9a88ea4e7bbd016c50a975de725d588a7f4f51c",
+      "WRITER": "858f12e9cb8262152e0531ea9627571e102719430f5565ccc9aeb39808dffc8b",
+      "EDITOR": "06dba8a8b4057fa85bc9828f8238e87f420de6bf38b3f06776f17f20c1b9fa06",
+      "REVISION": "f92a5aabebf943290f201f36e4c048f5f7ae77a89c9b00b054b8dcdd0c831b07",
+      "VISUAL": "e51b682742be5bc89e86c672153835ed4150853cb79ba77894f4cbf53f3a6e56",
+      "VISUAL_CONSTRAINT": "be21f73926aa4848b8815e8709fd3ddb28766bdc21f31608ba0c4cff1c8b1005",
+      "platform_rules": "c52716f5b333870b20623cce8ae8103634c62551753d8ffd90763aaaa1e3b016"
+    },
+    "generation_settings": {
+      "strategist_temperature": 0.2,
+      "writer_temperature": 0.4,
+      "editor_temperature": 0,
+      "revision_temperature": 0.25,
+      "max_tokens": 2200,
+      "image_quality": "low",
+      "image_size": "1024x1024"
+    },
+    "provenance": "captured_at_run_creation"
+  },
+  "run_id": "6c61957e-568b-4d1d-8e90-03f7d0454f30",
+  "brief": "Write a newsletter for engineers about making AI tool retries safe and reversible. Explain how to distinguish read-only retries from actions that can duplicate side effects. Use a clearly hypothetical support-workflow example, an idempotency key, checking the outcome before retrying, a bounded retry limit and backoff, and human handoff when state is uncertain. Include an actionable checklist and limitations: compensation is not always an undo, and irreversible actions require confirmation. Do not claim measured results or cite unsupplied facts. Use a concise email subject, 400–700 words, and at least three descriptive plain-text section headings.",
+  "status": "complete",
+  "images": [
+    {
+      "label": "initial",
+      "asset_file": "b9bc098cfb4ab27d6d49538e.png",
+      "asset_sha256": "b9bc098cfb4ab27d6d49538e04a43623e4df9b53e436090ff906f86be3296c15",
+      "image_prompt": "Square editorial illustration of a modern, abstract control hub for an AI payments system. The scene is divided into two visually distinct vertical lanes. On the left lane, representing safe read-only operations, a series of thin, translucent data streams flow smoothly from stylized user icons through tall, minimal screens and loop back to a central AI console. The streams are light blue lines with soft glow, forming gentle arcs that clearly return to their origin, suggesting repeated, harmless checks. On the right lane, representing side-effectful actions, fewer but heavier glowing tokens travel along a separate track. Each token is a solid, warm-colored shape that must pass through a geometric gate structure with a prominent keyhole-shaped cutout before continuing to a stylized payment terminal block. Behind the gate, one token appears securely docked in a small status bay connected to the payment terminal, while an identical second token is visually blocked by a barrier and redirected along a side track toward a small, elevated platform where a single neutral human silhouette sits at a console. The composition highlights a clear contrast: light, looping flows on the left, and gated, tightly controlled flows on the right. Color palette: cool blues and teals for background and read-only flows, with warm oranges and yellows for the action tokens, gate, and human review area. Lighting is clean and slightly directional from above, creating subtle shadows and depth while keeping the scene uncluttered and highly legible. No readable text or symbols, just abstract shapes and icons conveying control, gating, and escalation.\n\nMandatory image constraint: no written or printed text,\nletters, words, numbers, labels, captions, typography, logos or watermarks.\nAll documents and screens must be blank or contain only abstract non-symbolic shapes.",
+      "reason": "The image uses an abstract dual-lane control hub to convey the article’s core idea: AI workflows must distinguish between safely retriable read calls and risky side-effectful calls. Smooth, looping light-blue flows show read-only retries as harmless, while warm, solid tokens that pass through a keyhole-like gate and sometimes get diverted to a human operator represent idempotent, controlled retries for payments and refunds with explicit human handoff when outcomes are unclear—all without using any text in the artwork.",
+      "requested_model": "openai/gpt-image-1-mini",
+      "actual_model": null,
+      "request_id": "c802ae84524ee861a7136357d34b6c5a749c6669a3c083a48d585b5a2eb40097",
+      "source": "mesh",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 5.647,
+          "prompt_tokens": 1253,
+          "completion_tokens": 354,
+          "total_tokens": 1607,
+          "stage": "visual_director"
+        },
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 6.792,
+          "prompt_tokens": 1655,
+          "completion_tokens": 426,
+          "total_tokens": 2081,
+          "stage": "visual_director"
+        },
+        {
+          "model": "openai/gpt-image-1-mini",
+          "requested_model": "openai/gpt-image-1-mini",
+          "actual_model": null,
+          "cache_hit": false,
+          "elapsed_seconds": 10.62,
+          "prompt_tokens": 357,
+          "completion_tokens": 272,
+          "total_tokens": 629,
+          "stage": "image_generation",
+          "request_id": "c802ae84524ee861a7136357d34b6c5a749c6669a3c083a48d585b5a2eb40097",
+          "download_retry": false
+        }
+      ],
+      "feedback": "",
+      "created_at": "2026-10-14T19:04:37.291189+00:00",
+      "asset_path": "assets/newsletter-initial.png"
+    }
+  ],
+  "verification_context": {
+    "type": "new_configuration_verification",
+    "prior_failure_report": "upgrade-smoke-first.json",
+    "change": "Newsletter-only target of 500–550 words with section budgets and actual-word-count schema correction feedback. LinkedIn prompt hashes, shared prompts, models and acceptance range remain unchanged.",
+    "recovery": false
+  },
+  "first_attempt_status": "complete",
+  "editor_state": "draft",
+  "title": "Stop AI retries from double-charging your users",
+  "content": "A single AI-driven retry can silently double-charge a customer while your logs still look “successful.”\n\nPrinciple: separate reads from actions\n\nStart with one concrete rule: treat every AI tool call as either read-only or side-effectful, and design retries differently for each.\n\nRead-only calls are safe to retry. Examples: fetch ticket details, generate a summary, check current balance. You can retry on timeouts with backoff and almost no risk.\n\nSide-effectful calls are different. Examples: issue a refund, send an email, cancel a subscription. Here, a naive retry can duplicate the action.\n\nSo you make side-effectful retries explicit transactions:\n\n- Attach an idempotency key to each unique intent.\n- Store and inspect the outcome for that key before retrying.\n- Apply bounded retries with backoff.\n- Hand off to a human when state is unclear.\n\nHypothetical support workflow: AI-driven refunds\n\nImagine a support system where an AI agent helps with refunds.\n\n1) The agent decides a user should get a $20 refund for ticket T123.\n2) It calls a Refund API through your orchestration layer.\n\nYou generate an idempotency key like: \"refund:T123:20:USD\". The Refund API stores:\n- key\n- status (pending, succeeded, failed, unknown)\n- external references (payment provider id)\n\nFirst attempt:\n- The call goes out.\n- You get a network timeout.\n- The AI tool framework wants to retry.\n\nBefore retrying, your orchestration layer:\n- Looks up the idempotency key.\n- Sees status=pending, no final outcome.\n\nYou apply a small bounded retry policy: for example, 3 attempts with exponential backoff. On the second attempt, the provider replies \"refund succeeded\". You mark the key as succeeded and store the provider reference.\n\nLater, the AI agent or a human clicks \"retry refund\" again for the same ticket and amount. The system:\n- Recomputes the same idempotency key.\n- Finds status=succeeded.\n- Returns the recorded success to the caller instead of talking to the payment provider again.\n\nNo double refund. The AI sees a stable, repeatable outcome. Your logs show clear state instead of a tangle of half-failed calls.\n\nIf, instead, the lookup finds conflicting data (for example, two partial provider responses) or an impossible combination of status and side effects, you stop retrying and route the ticket to a human queue with the full history.\n\nPractical checklist for your workflows\n\nUse this as a design and test checklist:\n\n- List operations: For each AI tool, list all underlying API calls.\n- Label risk: Mark each call as read-only or side-effectful.\n- Define keys: For side-effectful calls, design an idempotency key schema tied to intent (not request timestamp).\n- Persist outcomes: Store status and external references per key so you can inspect them.\n- Set limits: Define max retry count and backoff for each operation type.\n- Guard rails: Block retries when state is contradictory or missing critical fields.\n- Human handoff: Specify clear rules for when to stop and escalate.\n- Test flows: Build small tests that simulate timeouts, partial failures, and repeated AI \"retry\" actions.\n- This week: pick one AI-assisted workflow and add idempotency keys plus explicit retry limits for its highest-risk action. Write down the exact rules that force a human handoff when the state looks strange.\n\nLimitations and trade-offs\n\nIdempotency helps, but it does not erase every mistake.\n\nCompensation is not always a true undo. A second “fix” (like charging and then refunding) may still create user confusion, tax implications, or reporting noise.\n\nSome actions are irreversible by nature: sending an email, posting a message, shipping a package, rotating a key. These should require explicit confirmation, and AI agents should not auto-retry them without a human in the loop.\n\nYou will still face ambiguous states. In those cases, more retries just increase risk. Design your system so that uncertainty is a trigger for human review, not more automation.",
+  "word_count": 630,
+  "versions": [
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:version:0",
+      "version": 1,
+      "kind": "draft",
+      "title": "Stop AI retries from double-charging your users",
+      "content": "A single AI-driven retry can silently double-charge a customer while your logs still look “successful.”\n\nPrinciple: separate reads from actions\n\nStart with one concrete rule: treat every AI tool call as either read-only or side-effectful, and design retries differently for each.\n\nRead-only calls are safe to retry. Examples: fetch ticket details, generate a summary, check current balance. You can retry on timeouts with backoff and almost no risk.\n\nSide-effectful calls are different. Examples: issue a refund, send an email, cancel a subscription. Here, a naive retry can duplicate the action.\n\nSo you make side-effectful retries explicit transactions:\n\n- Attach an idempotency key to each unique intent.\n- Store and inspect the outcome for that key before retrying.\n- Apply bounded retries with backoff.\n- Hand off to a human when state is unclear.\n\nHypothetical support workflow: AI-driven refunds\n\nImagine a support system where an AI agent helps with refunds.\n\n1) The agent decides a user should get a $20 refund for ticket T123.\n2) It calls a Refund API through your orchestration layer.\n\nYou generate an idempotency key like: \"refund:T123:20:USD\". The Refund API stores:\n- key\n- status (pending, succeeded, failed, unknown)\n- external references (payment provider id)\n\nFirst attempt:\n- The call goes out.\n- You get a network timeout.\n- The AI tool framework wants to retry.\n\nBefore retrying, your orchestration layer:\n- Looks up the idempotency key.\n- Sees status=pending, no final outcome.\n\nYou apply a small bounded retry policy: for example, 3 attempts with exponential backoff. On the second attempt, the provider replies \"refund succeeded\". You mark the key as succeeded and store the provider reference.\n\nLater, the AI agent or a human clicks \"retry refund\" again for the same ticket and amount. The system:\n- Recomputes the same idempotency key.\n- Finds status=succeeded.\n- Returns the recorded success to the caller instead of talking to the payment provider again.\n\nNo double refund. The AI sees a stable, repeatable outcome. Your logs show clear state instead of a tangle of half-failed calls.\n\nIf, instead, the lookup finds conflicting data (for example, two partial provider responses) or an impossible combination of status and side effects, you stop retrying and route the ticket to a human queue with the full history.\n\nPractical checklist for your workflows\n\nUse this as a design and test checklist:\n\n- List operations: For each AI tool, list all underlying API calls.\n- Label risk: Mark each call as read-only or side-effectful.\n- Define keys: For side-effectful calls, design an idempotency key schema tied to intent (not request timestamp).\n- Persist outcomes: Store status and external references per key so you can inspect them.\n- Set limits: Define max retry count and backoff for each operation type.\n- Guard rails: Block retries when state is contradictory or missing critical fields.\n- Human handoff: Specify clear rules for when to stop and escalate.\n- Test flows: Build small tests that simulate timeouts, partial failures, and repeated AI \"retry\" actions.\n\nLimitations and trade-offs\n\nIdempotency helps, but it does not erase every mistake.\n\nCompensation is not always a true undo. A second “fix” (like charging and then refunding) may still create user confusion, tax implications, or reporting noise.\n\nSome actions are irreversible by nature: sending an email, posting a message, shipping a package, rotating a key. These should require explicit confirmation, and AI agents should not auto-retry them without a human in the loop.\n\nYou will still face ambiguous states. In those cases, more retries just increase risk. Design your system so that uncertainty is a trigger for human review, not more automation.\n\nOne action for this week\n\nPick one AI-assisted workflow and add idempotency keys plus explicit retry limits for its highest-risk action. Then write down the exact rules that force a human handoff when the state looks strange.",
+      "addressed_requests": [],
+      "created_at": "2026-10-14T19:03:45.983007+00:00",
+      "source": "mesh",
+      "model": "openai/gpt-5.1",
+      "prompt_version": "2026-10-14.5",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 13.124,
+          "prompt_tokens": 1433,
+          "completion_tokens": 938,
+          "total_tokens": 2371,
+          "stage": "writer"
+        }
+      ],
+      "platform": "newsletter"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:version:1",
+      "version": 2,
+      "kind": "revision",
+      "title": "Stop AI retries from double-charging your users",
+      "content": "A single AI-driven retry can silently double-charge a customer while your logs still look “successful.”\n\nPrinciple: separate reads from actions\n\nStart with one concrete rule: treat every AI tool call as either read-only or side-effectful, and design retries differently for each.\n\nRead-only calls are safe to retry. Examples: fetch ticket details, generate a summary, check current balance. You can retry on timeouts with backoff and almost no risk.\n\nSide-effectful calls are different. Examples: issue a refund, send an email, cancel a subscription. Here, a naive retry can duplicate the action.\n\nSo you make side-effectful retries explicit transactions:\n\n- Attach an idempotency key to each unique intent.\n- Store and inspect the outcome for that key before retrying.\n- Apply bounded retries with backoff.\n- Hand off to a human when state is unclear.\n\nHypothetical support workflow: AI-driven refunds\n\nImagine a support system where an AI agent helps with refunds.\n\n1) The agent decides a user should get a $20 refund for ticket T123.\n2) It calls a Refund API through your orchestration layer.\n\nYou generate an idempotency key like: \"refund:T123:20:USD\". The Refund API stores:\n- key\n- status (pending, succeeded, failed, unknown)\n- external references (payment provider id)\n\nFirst attempt:\n- The call goes out.\n- You get a network timeout.\n- The AI tool framework wants to retry.\n\nBefore retrying, your orchestration layer:\n- Looks up the idempotency key.\n- Sees status=pending, no final outcome.\n\nYou apply a small bounded retry policy: for example, 3 attempts with exponential backoff. On the second attempt, the provider replies \"refund succeeded\". You mark the key as succeeded and store the provider reference.\n\nLater, the AI agent or a human clicks \"retry refund\" again for the same ticket and amount. The system:\n- Recomputes the same idempotency key.\n- Finds status=succeeded.\n- Returns the recorded success to the caller instead of talking to the payment provider again.\n\nNo double refund. The AI sees a stable, repeatable outcome. Your logs show clear state instead of a tangle of half-failed calls.\n\nIf, instead, the lookup finds conflicting data (for example, two partial provider responses) or an impossible combination of status and side effects, you stop retrying and route the ticket to a human queue with the full history.\n\nPractical checklist for your workflows\n\nUse this as a design and test checklist:\n\n- List operations: For each AI tool, list all underlying API calls.\n- Label risk: Mark each call as read-only or side-effectful.\n- Define keys: For side-effectful calls, design an idempotency key schema tied to intent (not request timestamp).\n- Persist outcomes: Store status and external references per key so you can inspect them.\n- Set limits: Define max retry count and backoff for each operation type.\n- Guard rails: Block retries when state is contradictory or missing critical fields.\n- Human handoff: Specify clear rules for when to stop and escalate.\n- Test flows: Build small tests that simulate timeouts, partial failures, and repeated AI \"retry\" actions.\n- This week: pick one AI-assisted workflow and add idempotency keys plus explicit retry limits for its highest-risk action. Write down the exact rules that force a human handoff when the state looks strange.\n\nLimitations and trade-offs\n\nIdempotency helps, but it does not erase every mistake.\n\nCompensation is not always a true undo. A second “fix” (like charging and then refunding) may still create user confusion, tax implications, or reporting noise.\n\nSome actions are irreversible by nature: sending an email, posting a message, shipping a package, rotating a key. These should require explicit confirmation, and AI agents should not auto-retry them without a human in the loop.\n\nYou will still face ambiguous states. In those cases, more retries just increase risk. Design your system so that uncertainty is a trigger for human review, not more automation.",
+      "addressed_requests": [
+        "Reduced section headings from five to four by removing the separate 'One action for this week' heading and folding its content into the checklist as a final bullet starting with 'This week:'.",
+        "Adjusted the transition in the checklist section so the closing action reads as part of the practical exercise rather than a new section."
+      ],
+      "created_at": "2026-10-14T19:04:04.945214+00:00",
+      "source": "mesh",
+      "model": "openai/gpt-5.1",
+      "prompt_version": "2026-10-14.5",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 9.005,
+          "prompt_tokens": 3093,
+          "completion_tokens": 1002,
+          "total_tokens": 4095,
+          "stage": "revision_1"
+        }
+      ],
+      "platform": "newsletter"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:review:0",
+      "iteration": 0,
+      "criteria": [
+        {
+          "name": "brief_fulfillment",
+          "score": 5,
+          "reason": "The draft follows the newsletter brief closely: it uses a problem-first opening sentence (\"A single AI-driven retry can silently double-charge a customer…\"), includes a clearly hypothetical support-workflow refund example, explains read-only vs side-effectful retries, uses an idempotency key, checking outcome before retrying, bounded retries with backoff, and human handoff when state is uncertain. It also provides a practical checklist and a limitations section covering compensation not being a true undo and irreversible actions needing confirmation."
+        },
+        {
+          "name": "specificity",
+          "score": 5,
+          "reason": "The text is concrete and specific throughout: it names exact operations (\"issue a refund, send an email\"), shows an explicit idempotency key format (\"refund:T123:20:USD\"), enumerates stored fields (\"status (pending, succeeded, failed, unknown)\"), and gives clear checklist items (\"design an idempotency key schema tied to intent\"). The hypothetical workflow is detailed enough to be implementable without drifting into vague advice."
+        },
+        {
+          "name": "clarity",
+          "score": 4,
+          "reason": "The structure is clear, with descriptive headings (\"Principle: separate reads from actions\", \"Hypothetical support workflow: AI-driven refunds\", \"Practical checklist for your workflows\", \"Limitations and trade-offs\", \"One action for this week\"). Sentences are mostly short and direct. One minor clarity issue is that there are five headings, while the platform_rules call for four concise descriptive section headings; \"One action for this week\" overlaps functionally with the checklist and could be folded into an existing section to reduce heading count and keep the flow tighter."
+        },
+        {
+          "name": "brand_fit",
+          "score": 5,
+          "reason": "Tone is calm, precise, and encouraging, with short, direct sentences (\"Read-only calls are safe to retry.\", \"Idempotency helps, but it does not erase every mistake.\"). The language is concrete and test-oriented (\"Use this as a design and test checklist\", \"Build small tests that simulate timeouts\"). It avoids hype, invented experience, and unsupported claims, aligning well with the provided voice profile."
+        },
+        {
+          "name": "factual_care",
+          "score": 5,
+          "reason": "All content is framed as design guidance and a hypothetical example (explicitly labeled \"Imagine a support system…\"). There are no invented metrics, results, or citations. Statements about idempotency, retries, and irreversible actions are standard engineering practices and are presented as considerations and trade-offs (\"Idempotency helps, but it does not erase every mistake.\") rather than guarantees."
+        }
+      ],
+      "requests": [
+        {
+          "issue": "Platform rules specify four concise descriptive section headings, but the draft uses five (\"Principle: separate reads from actions\", \"Hypothetical support workflow: AI-driven refunds\", \"Practical checklist for your workflows\", \"Limitations and trade-offs\", \"One action for this week\").",
+          "instruction": "Reduce the number of section headings from five to four by folding the closing \"One action for this week\" into an existing section (for example, as a final bullet under \"Practical checklist for your workflows\" or a closing sentence under \"Limitations and trade-offs\"), and adjust transitions so the flow still feels natural without introducing new sections."
+        }
+      ],
+      "approved": false,
+      "created_at": "2026-10-14T19:03:55.928028+00:00",
+      "source": "mesh",
+      "model": "openai/gpt-5.1",
+      "prompt_version": "2026-10-14.5",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 9.937,
+          "prompt_tokens": 2275,
+          "completion_tokens": 697,
+          "total_tokens": 2972,
+          "stage": "editor_0"
+        }
+      ]
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:review:1",
+      "iteration": 1,
+      "criteria": [
+        {
+          "name": "brief_fulfillment",
+          "score": 5,
+          "reason": "Meets all brief elements: problem-first hook in the first sentence (\"A single AI-driven retry can silently double-charge a customer…\"), clear distinction between read-only and side-effectful calls, explicit idempotency key and outcome-checking logic, bounded retries with backoff (\"for example, 3 attempts with exponential backoff\"), and human handoff when state is unclear. Includes a clearly hypothetical example (\"Imagine a support system…\"), an actionable checklist, and a limitations section noting that compensation is not always an undo and irreversible actions need confirmation. Uses four section headings and stays within the 400–700 word range."
+        },
+        {
+          "name": "specificity",
+          "score": 5,
+          "reason": "Gives concrete, inspectable details: example idempotency key format (\"refund:T123:20:USD\"), stored fields (\"status (pending, succeeded, failed, unknown)\" and \"external references\"), a sample retry policy (\"3 attempts with exponential backoff\"), and precise checklist items like \"design an idempotency key schema tied to intent (not request timestamp)\" and tests that \"simulate timeouts, partial failures, and repeated AI 'retry' actions.\""
+        },
+        {
+          "name": "clarity",
+          "score": 5,
+          "reason": "Short, direct sentences and simple sequencing keep the flow clear. The hypothetical workflow is broken into numbered and bulleted steps (\"First attempt:\" then \"Later, the AI agent or a human clicks 'retry refund'…\"), making the control flow easy to follow. Section headings are descriptive and separated by blank lines, matching the platform rules and aiding scan-ability."
+        },
+        {
+          "name": "brand_fit",
+          "score": 5,
+          "reason": "Voice matches the calm, precise, encouraging profile: no hype, no invented outcomes, and very concrete language (\"Start with one concrete rule…\", \"Use this as a design and test checklist\"). Style uses short sentences and practical advice. Vocabulary and concepts like \"concrete,\" \"inspect,\" and \"repeatable\" are woven into the narrative and checklist without overstatement."
+        },
+        {
+          "name": "factual_care",
+          "score": 5,
+          "reason": "Avoids unsupported claims and statistics; all examples are explicitly hypothetical (\"Imagine a support system…\"). Descriptions of idempotency, retries, and irreversible actions align with standard engineering practice and stay factual and generic. Limitations are framed cautiously (\"Idempotency helps, but it does not erase every mistake\"), avoiding causal or performance claims."
+        }
+      ],
+      "requests": [],
+      "approved": true,
+      "created_at": "2026-10-14T19:04:14.210094+00:00",
+      "source": "mesh",
+      "model": "openai/gpt-5.1",
+      "prompt_version": "2026-10-14.5",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 9.257,
+          "prompt_tokens": 3531,
+          "completion_tokens": 542,
+          "total_tokens": 4073,
+          "stage": "editor_1"
+        }
+      ]
+    }
+  ],
+  "pipeline_usage": [
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 6.895,
+      "prompt_tokens": 952,
+      "completion_tokens": 394,
+      "total_tokens": 1346,
+      "stage": "strategist"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 4.114,
+      "prompt_tokens": 1368,
+      "completion_tokens": 333,
+      "total_tokens": 1701,
+      "stage": "strategist"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 13.124,
+      "prompt_tokens": 1433,
+      "completion_tokens": 938,
+      "total_tokens": 2371,
+      "stage": "writer"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 9.937,
+      "prompt_tokens": 2275,
+      "completion_tokens": 697,
+      "total_tokens": 2972,
+      "stage": "editor_0"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 9.005,
+      "prompt_tokens": 3093,
+      "completion_tokens": 1002,
+      "total_tokens": 4095,
+      "stage": "revision_1"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 9.257,
+      "prompt_tokens": 3531,
+      "completion_tokens": 542,
+      "total_tokens": 4073,
+      "stage": "editor_1"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 5.647,
+      "prompt_tokens": 1253,
+      "completion_tokens": 354,
+      "total_tokens": 1607,
+      "stage": "visual_director"
+    },
+    {
+      "model": "openai/gpt-5.1",
+      "requested_model": "openai/gpt-5.1",
+      "actual_model": "gpt-5.1-2025-11-13",
+      "cache_hit": false,
+      "elapsed_seconds": 6.792,
+      "prompt_tokens": 1655,
+      "completion_tokens": 426,
+      "total_tokens": 2081,
+      "stage": "visual_director"
+    },
+    {
+      "model": "openai/gpt-image-1-mini",
+      "requested_model": "openai/gpt-image-1-mini",
+      "actual_model": null,
+      "cache_hit": false,
+      "elapsed_seconds": 10.62,
+      "prompt_tokens": 357,
+      "completion_tokens": 272,
+      "total_tokens": 629,
+      "stage": "image_generation",
+      "request_id": "c802ae84524ee861a7136357d34b6c5a749c6669a3c083a48d585b5a2eb40097",
+      "download_retry": false
+    }
+  ],
+  "error": null,
+  "error_diagnostics": null,
+  "decisions": [
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:editor_0",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "editor",
+      "choice": "Revision review 0: 1 edit requests",
+      "reason": "Reduce the number of section headings from five to four by folding the closing \"One action for this week\" into an existing section (for example, as a final bullet under \"Practical checklist for your workflows\" or a closing sentence under \"Limitations and trade-offs\"), and adjust transitions so the flow still feels natural without introducing new sections.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:03:55.930550+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:editor_1",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "editor",
+      "choice": "Approved after revision",
+      "reason": "Meets all brief elements: problem-first hook in the first sentence (\"A single AI-driven retry can silently double-charge a customer…\"), clear distinction between read-only and side-effectful calls, explicit idempotency key and outcome-checking logic, bounded retries with backoff (\"for example, 3 attempts with exponential backoff\"), and human handoff when state is unclear. Includes a clearly hypothetical example (\"Imagine a support system…\"), an actionable checklist, and a limitations section noting that compensation is not always an undo and irreversible actions need confirmation. Uses four section headings and stays within the 400–700 word range. Gives concrete, inspectable details: example idempotency key format (\"refund:T123:20:USD\"), stored fields (\"status (pending, succeeded, failed, unknown)\" and \"external references\"), a sample retry policy (\"3 attempts with exponential backoff\"), and precise checklist items like \"design an idempotency key schema tied to intent (not request timestamp)\" and tests that \"simulate timeouts, partial failures, and repeated AI 'retry' actions.\" Short, direct sentences and simple sequencing keep the flow clear. The hypothetical workflow is broken into numbered and bulleted steps (\"First attempt:\" then \"Later, the AI agent or a human clicks 'retry refund'…\"), making the control flow easy to follow. Section headings are descriptive and separated by blank lines, matching the platform rules and aiding scan-ability. Voice matches the calm, precise, encouraging profile: no hype, no invented outcomes, and very concrete language (\"Start with one concrete rule…\", \"Use this as a design and test checklist\"). Style uses short sentences and practical advice. Vocabulary and concepts like \"concrete,\" \"inspect,\" and \"repeatable\" are woven into the narrative and checklist without overstatement. Avoids unsupported claims and statistics; all examples are explicitly hypothetical (\"Imagine a support system…\"). Descriptions of idempotency, retries, and irreversible actions align with standard engineering practice and stay factual and generic. Limitations are framed cautiously (\"Idempotency helps, but it does not erase every mistake\"), avoiding causal or performance claims.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:04:14.212203+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:finish",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "coordinator",
+      "choice": "Content ready for human review",
+      "reason": "At least one substantive revision was saved. The final editor review approved all criteria.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:04:37.301091+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:policy",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "learning",
+      "choice": "Selected problem-first",
+      "reason": "Explore hook styles while collecting sufficient comparable feedback.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:03:21.818483+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:revision_1",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "writer",
+      "choice": "Substantive revision 1 saved",
+      "reason": "Reduced section headings from five to four by removing the separate 'One action for this week' heading and folding its content into the checklist as a final bullet starting with 'This week:'. Adjusted the transition in the checklist section so the closing action reads as part of the practical exercise rather than a new section.",
+      "evidence_ids": [
+        "6c61957e-568b-4d1d-8e90-03f7d0454f30:review:0"
+      ],
+      "created_at": "2026-10-14T19:04:04.948800+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:strategist",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "strategist",
+      "choice": "Designing safe, reversible AI retries in transactional workflows",
+      "reason": "Problem-first fits because the brief centers on avoiding concrete failure modes, like duplicate refunds or repeated side effects, when AI tools are retried. The audience is clearly engineers who care about idempotency, retry policies and operational safety in workflows. A newsletter needs a compact teaching arc, so the outline moves from the failure mode, to a simple design principle, to a single hypothetical support example, then to a checklist and trade-offs. This matches the requested calm, concrete voice with short, actionable steps. With no learning snapshot, this is framed as an initial exploration while keeping the hook choice consistent for later comparison.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:03:32.847480+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:visual",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "visual",
+      "choice": "Matching visual saved",
+      "reason": "The image uses an abstract dual-lane control hub to convey the article’s core idea: AI workflows must distinguish between safely retriable read calls and risky side-effectful calls. Smooth, looping light-blue flows show read-only retries as harmless, while warm, solid tokens that pass through a keyhole-like gate and sometimes get diverted to a human operator represent idempotent, controlled retries for payments and refunds with explicit human handoff when outcomes are unclear—all without using any text in the artwork.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:04:37.297735+00:00"
+    },
+    {
+      "id": "6c61957e-568b-4d1d-8e90-03f7d0454f30:writer",
+      "post_id": "c6e5ab5d-4b0d-4a61-a4ec-9a6463ffe447",
+      "node": "writer",
+      "choice": "Original draft saved",
+      "reason": "Draft follows the strategy and frozen brand profile. Preserved for editorial comparison.",
+      "evidence_ids": [],
+      "created_at": "2026-10-14T19:03:45.985075+00:00"
+    }
+  ],
+  "newsletter_format_valid": true,
+  "regeneration": {
+    "status": "failed",
+    "feedback": "Use a warm restrained orange accent to distinguish the uncertain branch and muted green for the checked safe branch. Make the stopping point and the reversible loop visually clear with unmarked geometric forms. Keep all screens and documents blank; no text, letters, numbers, labels or logos.",
+    "request_id": "e1bb5f59-ba8e-4518-ad55-c34727c0dc51",
+    "error": "Mesh returned invalid structured output twice (VisualBrief). The failed step can be retried.",
+    "diagnostics": {
+      "schema": "VisualBrief",
+      "attempt": 2,
+      "errors": [
+        {
+          "type": "string_too_long",
+          "loc": [
+            "image_prompt"
+          ],
+          "msg": "String should have at most 2000 characters"
+        }
+      ],
+      "diagnostic_id": "054ca7a903db0a3370e6285b9700ac4a4f75949975173677008d90a4656ec5c5",
+      "usage": [
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 8.917,
+          "prompt_tokens": 1307,
+          "completion_tokens": 691,
+          "total_tokens": 1998
+        },
+        {
+          "model": "openai/gpt-5.1",
+          "requested_model": "openai/gpt-5.1",
+          "actual_model": "gpt-5.1-2025-11-13",
+          "cache_hit": false,
+          "elapsed_seconds": 7.715,
+          "prompt_tokens": 2022,
+          "completion_tokens": 525,
+          "total_tokens": 2547
+        }
+      ]
+    }
+  },
+  "finished_at": "2026-10-14T19:04:53.941463+00:00",
+  "rejected_visual_director_attempts": [
+    {
+      "stage": "initial_visual_director",
+      "attempt": 1,
+      "image_prompt": "Square editorial illustration showing a split-screen control room for an AI-powered payment system. On the left, a calm, clearly labeled “Read-Only” lane: thin, translucent data streams flow from user accounts through monitors that display charts and ticket details, with arrows looping back safely to the AI console. On the right, a heavier, guarded “Actions” lane: each action (refund, cancel, email) is represented as a solid, glowing token that must pass through a turnstile-like gate stamped with a unique key icon before reaching a payment terminal. In front of the actions lane gate, a visible log panel shows a single refund token with status changing from pending to succeeded, while a second identical token is blocked and redirected to a small “Human Review” desk in the corner with a neutral silhouette figure. Overall color palette: cool blues and teals for the environment, with warm accents (oranges/yellows) highlighting the keyed actions and human review area. Lighting is clean and modern, with subtle depth but minimal clutter, emphasizing the contrast between freely retried read operations and tightly controlled, idempotent side-effectful operations. No text labels in the image, only visual cues like icons and lane styling.",
+      "image_prompt_characters": 1247,
+      "reason": "This visual communicates the central idea of separating read-only AI calls from side-effectful actions and using idempotency keys to prevent double-charging on retries. The dual-lane control room metaphor shows retries as safe loops for reads, while actions must pass through a keyed gate that enforces one successful outcome, with ambiguous states escalated to a human review path—mirroring the newsletter’s refund example, retry rules, and human handoff design.",
+      "accepted": false,
+      "schema_errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "image_prompt"
+          ],
+          "msg": "Value error, The image must contain no readable text. Remove instructions for labeled objects, captions, inscriptions or quoted words; communicate the idea with unmarked shapes instead."
+        }
+      ],
+      "actual_model": "gpt-5.1-2025-11-13"
+    },
+    {
+      "stage": "regeneration_visual_director",
+      "attempt": 1,
+      "image_prompt": "Square editorial illustration of a clean, abstract decision flow that visually contrasts safe AI retries from risky double-charging, without any text or numbers.\n\nCentral composition: In the center, a stylized, minimal “orchestration node” shown as a neutral off-white circle with a subtle dark outline. From this circle, two main paths emerge, forming a subtle Y-shape.\n\nLeft path (safe read-only retries): A smooth loop that curves out and back into the central node, clearly forming a continuous circular path. This loop is colored in muted green tones with soft gradients. Along the loop, place two or three small identical green geometric tokens (simple circles or rounded squares) that appear to circulate, implying repeated, harmless operations. The loop is clearly closed and stable, with no break in the path.\n\nRight path (risky side-effectful action): A straight path that extends from the central node into an ambiguous branching area. The path starts neutral then transitions into a warm, restrained orange accent as it approaches the branch. At the branch, split into two diverging lines, both orange, but one line stops abruptly against a solid, vertical dark shape (like a dark gray rounded-rectangle “stop barrier”), while the other line curves back awkwardly toward the origin without fully connecting, suggesting an attempted but unsafe repeat. The orange color should signal caution and uncertainty.\n\nDouble-charge metaphor: Near the risky right branch, place two identical warm-orange geometric tokens (matching the left-path tokens in shape but not color) uncomfortably close and slightly overlapping at the end of the branch that doesn’t hit the barrier, hinting at an unintended duplicate outcome. They should feel crowded and slightly misaligned compared to the calm spacing of the green tokens.\n\nHuman handoff / escalation: At the end of the right-hand branch that meets the dark stop barrier, place a neutral, light-gray vertical rectangle or soft pillar shape just beyond the barrier, separated by a small gap, suggesting a different domain (human review) without depicting people or text.\n\nBackground and style: Use a very light, warm off-white background with subtle soft shadows under the paths and tokens to keep a clean, editorial feel. Lines should be smooth and geometric, with generous negative space. Color palette: muted green for the safe loop, warm restrained orange for the risky branch, dark charcoal gray for the barrier and outlines, light neutrals for the background and central node. No text, letters, digits, logos, UI screens, or document icons anywhere—only abstract geometric forms and paths.\n\nLighting: Soft, even lighting with minimal gradients, like a flat illustration with slight depth from shadows, emphasizing clarity over realism.",
+      "image_prompt_characters": 2787,
+      "reason": "This image communicates the core idea of separating safe, read-only AI retries from risky, side-effectful actions. The green closed loop visually represents safe, repeatable operations where retries don’t harm. The orange branching path, with a barrier and an awkward partial loop plus overlapping tokens, conveys the danger of naive retries causing duplicate charges and the need for explicit stopping points and human escalation. The abstract geometry and color-coded paths match the newsletter’s conceptual focus on idempotency and retry design without introducing text or literal UI, while the specified colors follow the requested warm orange for uncertainty and muted green for the safe path.",
+      "accepted": false,
+      "schema_errors": [
+        {
+          "type": "string_too_long",
+          "loc": [
+            "image_prompt"
+          ],
+          "msg": "String should have at most 2000 characters"
+        }
+      ],
+      "actual_model": "gpt-5.1-2025-11-13"
+    },
+    {
+      "stage": "regeneration_visual_director",
+      "attempt": 2,
+      "image_prompt": "Square editorial illustration of an abstract decision flow contrasting safe AI retries with risky double-charging, without any text or numbers.\n\nCentral focus: In the middle, a neutral off-white circle with a thin dark outline represents the orchestration point. From it, two paths emerge like a Y.\n\nLeft path (safe, read-only retries): A smooth closed loop that leaves the circle and curves back into it, forming a calm circular track. The loop is in muted green with soft shading. Along the loop, place two or three evenly spaced small green tokens (simple circles or rounded squares) moving along the track, suggesting harmless repeated reads. The loop is clearly continuous and stable.\n\nRight path (risky, side-effectful actions): A path that starts neutral near the center and gradually shifts into a warm, restrained orange as it moves outward. Near the edge, it splits into two orange branches.\n- One branch ends against a solid dark charcoal rounded-rectangle barrier, clearly stopping there.\n- Just beyond that barrier, separated by a slim gap, place a tall, light-gray vertical rectangle or pillar, hinting at a different domain (human review) without showing people.\n- The other branch bends back toward the center but does not fully reconnect, forming an awkward, incomplete loop that feels unstable.\n\nDouble-charge metaphor: At the end of the incomplete orange branch, place two identical orange tokens, very close and slightly overlapping, mirroring the green tokens’ shape but arranged in a way that feels crowded and unintentional, implying a duplicated charge.\n\nBackground and style: Very light warm off-white background, ample negative space, clean vector-like lines. Use muted green for the safe loop, warm restrained orange for the risky branch, dark charcoal for the barrier and outlines, and soft neutral grays for structural elements. Add subtle soft shadows under paths and tokens for gentle depth. No text, letters, numbers, logos, screens, or document icons—only abstract geometric forms and paths.",
+      "image_prompt_characters": 2024,
+      "reason": "This visual expresses the post’s core idea: separating safe read-only retries from dangerous side-effectful ones. The calm green closed loop shows retries that can safely repeat, while the orange branching path, overlapping tokens, and hard stop barrier illustrate how naive retries can double-charge and where the system should halt and hand off to humans. The abstract geometry and specified colors align with the requested warm orange for uncertainty and muted green for safety, keeping it editorial and conceptual without any text or UI elements.",
+      "accepted": false,
+      "schema_errors": [
+        {
+          "type": "string_too_long",
+          "loc": [
+            "image_prompt"
+          ],
+          "msg": "String should have at most 2000 characters"
+        }
+      ],
+      "actual_model": "gpt-5.1-2025-11-13"
+    }
+  ],
+  "visual_review": {
+    "status": "inspected_initial_image",
+    "method": "Assistant visual inspection with view_image; not automated image scoring or human-user review",
+    "asset_file": "b9bc098cfb4ab27d6d49538e.png",
+    "observations": [
+      "Square cyan-and-orange illustration with looped paths, a key or gate and a human silhouette.",
+      "No legible words or numbers were observed.",
+      "The metaphor relates to controlled access and loops, but the stopping and retry decisions are abstract rather than explicit."
+    ],
+    "regenerated_image": "Not available: the visual director failed its prompt-length constraint before a second image request.",
+    "asset_path": "assets/newsletter-initial.png"
+  }
+}

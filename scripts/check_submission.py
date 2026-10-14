@@ -37,12 +37,16 @@ def main() -> int:
     if workflow.is_file():
         text = workflow.read_text()
         checks.append(("Required CI secret references", all(secret in text for secret in ("MESH_API_KEY", "SUBMISSION_TOKEN")), "Checks names only, never values"))
-    results_file = ROOT / "evals/results.json"
+    reports = [ROOT / "evals" / name / "results.json" for name in ("fresh-recovered", "fresh")]
+    results_file = next((report for report in reports if report.is_file()), ROOT / "evals/results.json")
     if results_file.is_file():
         try:
             result = json.loads(results_file.read_text())
-            checks.append(("Recorded evaluation", len(result.get("cases", [])) == 8,
-                           f"Mode: {result.get('mode', 'unknown')}; quality-scored pairs: {result.get('summary', {}).get('scored_pairs', 0)}"))
+            summary = result.get("summary", {})
+            cases = result.get("cases", [])
+            valid = bool(cases) and len(cases) == summary.get("pairs") and result.get("mode") in {"fixture", "live"}
+            checks.append(("Recorded evaluation", valid,
+                           f"{results_file.relative_to(ROOT)}; mode: {result.get('mode', 'unknown')}; completed: {summary.get('completed_pairs', 0)}/{len(cases)}; quality-scored: {summary.get('scored_pairs', 0)}"))
         except (ValueError, TypeError):
             checks.append(("Recorded evaluation", False, "Invalid result JSON"))
     else:

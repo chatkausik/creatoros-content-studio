@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   AudioLines,
@@ -44,12 +43,18 @@ import type {
   Post,
   Run,
   Source,
+  Snapshot,
+  Evidence,
+  Platform,
 } from "./api";
 
 type Page = "studio" | "brand" | "queue" | "learning";
 type Dialog =
   | { type: "schedule"; post: Post }
   | { type: "feedback"; post: Post }
+  | { type: "edit"; post: Post }
+  | { type: "approve"; post: Post }
+  | { type: "image"; post: Post }
   | { type: "brand" }
   | { type: "import" }
   | null;
@@ -198,6 +203,9 @@ export default function App() {
     [selectedId, setSelectedId] = useState(""),
     [brief, setBrief] = useState(""),
     [mode, setMode] = useState<Mode>("demo"),
+    [platform, setPlatform] = useState<Platform>("linkedin"),
+    [modelPreset, setModelPreset] = useState(""),
+    [snapshotId, setSnapshotId] = useState(""),
     [source, setSource] = useState<Source>("simulated"),
     [windowValue, setWindowValue] = useState("24h"),
     [useLearning, setUseLearning] = useState(true),
@@ -348,6 +356,11 @@ export default function App() {
       return true;
     } catch (e) {
       setError((e as Error).message);
+      try {
+        await refresh();
+      } catch {
+        /* Keep the original actionable error. */
+      }
       return false;
     } finally {
       setBusy("");
@@ -358,18 +371,36 @@ export default function App() {
       (s) =>
         s.brand_id === brand?.id &&
         s.source === source &&
-        s.window === windowValue,
+        s.window === windowValue &&
+        (s.platform || "linkedin") === platform,
     )
     .sort((a, b) => b.version - a.version);
-  const snapshot = snapshots[0];
-  const previousSnapshot = snapshots[1];
+  const snapshot = snapshots.find((s) => s.id === snapshotId) || snapshots[0];
+  const previousSnapshot = snapshots.find(
+    (s) => s.version < (snapshot?.version || 0),
+  );
   const studioSnapshot = post?.learning_snapshot;
   const selectedRun = data?.runs.find((r) => r.id === post?.run_id);
   const latestReview = post?.reviews?.at(-1);
-  const editorialReview = post?.reviews?.find(
-    (review) => review.requests?.length,
-  );
+  const latestVersion = post?.versions?.at(-1);
+  const editedAfterReview =
+    post?.review_stale ??
+    (latestVersion?.kind === "manual_edit" ||
+      latestVersion?.kind === "human_edit");
+  const outstandingRequests = latestReview?.requests || [];
+  const reviewPassed =
+    !!latestReview?.approved &&
+    !outstandingRequests.length &&
+    !editedAfterReview;
+  const inspectSnapshot = (target: Snapshot) => {
+    setPlatform(target.platform || "linkedin");
+    setSource(target.source);
+    setWindowValue(target.window);
+    setSnapshotId(target.id);
+    switchPage("learning");
+  };
   const feedbackPosts = posts
+    .filter((p) => (p.platform || "linkedin") === platform)
     .filter((p) => ["published", "published_manually"].includes(p.status))
     .filter((p) =>
       source === "simulated"
@@ -392,6 +423,8 @@ export default function App() {
           brand_id: brand.id,
           brief: brief.trim(),
           mode,
+          platform,
+          ...(modelPreset ? { model_preset: modelPreset } : {}),
           use_learning: useLearning,
           feedback_source: source,
           window: windowValue,
@@ -408,6 +441,7 @@ export default function App() {
     setBrandId(id);
     setSelectedId("");
     setActiveRunId("");
+    setSnapshotId("");
     setSource(
       data?.brands.find((b) => b.id === id)?.is_demo ? "simulated" : "manual",
     );
@@ -423,13 +457,16 @@ export default function App() {
       );
     }
   };
-  const download = () => {
+  const download = (format: "txt" | "md" = "txt") => {
     if (!post) return;
     const link = document.createElement("a");
     link.href = URL.createObjectURL(
-      new Blob([post.content], { type: "text/plain" }),
+      new Blob(
+        [format === "md" ? `# ${post.title}\n\n${post.content}` : post.content],
+        { type: format === "md" ? "text/markdown" : "text/plain" },
+      ),
     );
-    link.download = `${(post.title || "creatoros-post").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`;
+    link.download = `${(post.title || "creatoros-post").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${format}`;
     link.click();
     URL.revokeObjectURL(link.href);
   };
@@ -662,10 +699,19 @@ export default function App() {
                         </span>
                         <h2>What’s on your mind?</h2>
                       </div>
-                      <Badge>
-                        <Linkedin size={12} />
-                        LinkedIn post
-                      </Badge>
+                      <label className="platform-select">
+                        <span className="sr-only">Content platform</span>
+                        <select
+                          value={platform}
+                          onChange={(e) =>
+                            setPlatform(e.target.value as Platform)
+                          }
+                        >
+                          <option value="linkedin">LinkedIn post</option>
+                          <option value="newsletter">Newsletter</option>
+                        </select>
+                        <ChevronDown size={12} />
+                      </label>
                     </div>
                     <label className="sr-only" htmlFor="brief">
                       Content brief
@@ -738,7 +784,28 @@ export default function App() {
                         <ArrowRight size={15} />
                       </Button>
                     </div>
+                    {mode === "live" && (
+                      <div className="model-preset-row">
+                        <label htmlFor="model-preset">Writing model</label>
+                        <select
+                          id="model-preset"
+                          value={modelPreset}
+                          onChange={(e) => setModelPreset(e.target.value)}
+                        >
+                          <option value="">
+                            Configured · {data.settings.chat_model}
+                          </option>
+                          <option value="budget">Budget · GPT-4o mini</option>
+                          <option value="submission-tested">
+                            Submission-tested · GPT-5.1
+                          </option>
+                        </select>
+                        <span>Model choice is saved with each run.</span>
+                      </div>
+                    )}
                     <div className="composer-caption">
+                      {platform === "newsletter" &&
+                        "Newsletter: a subject, useful sections, and a longer narrative. "}
                       {mode === "demo"
                         ? "Demo uses clearly labeled, deterministic fixtures. No AI request or API cost."
                         : data.settings.mesh_configured
@@ -907,6 +974,19 @@ export default function App() {
                             </Button>
                           </div>
                         )}
+                      {(post.review_stale || post.image_stale) && (
+                        <div className="draft-notice">
+                          <CircleHelp size={16} />
+                          <span>
+                            {post.review_stale
+                              ? "This version contains a human edit. Previous editor scores describe an earlier draft. "
+                              : ""}
+                            {post.image_stale
+                              ? "Check that the saved visual still matches the revised content."
+                              : ""}
+                          </span>
+                        </div>
+                      )}
                       <div className="post-preview">
                         <div className="post-author">
                           <div className="post-avatar">
@@ -916,14 +996,25 @@ export default function App() {
                             <strong>{brand?.name}</strong>
                             <p>{brand?.description || "Ideas worth sharing"}</p>
                             <span>
-                              LinkedIn preview ·{" "}
-                              <span aria-label="Public">◉</span>
+                              {post.platform === "newsletter"
+                                ? "Newsletter preview"
+                                : "LinkedIn preview"}{" "}
+                              · <span aria-label="Public">◉</span>
                             </span>
                           </div>
-                          <Linkedin size={21} className="linkedin-logo" />
+                          {post.platform === "newsletter" ? (
+                            <FileText size={21} />
+                          ) : (
+                            <Linkedin size={21} className="linkedin-logo" />
+                          )}
                         </div>
                         {post.content ? (
                           <>
+                            {post.platform === "newsletter" && (
+                              <h2 className="newsletter-subject">
+                                {post.title}
+                              </h2>
+                            )}
                             {tab === "diff" ? (
                               <>
                                 <div className="diff-legend">
@@ -975,24 +1066,26 @@ export default function App() {
                             voice. The editor makes it sharper.
                           </Empty>
                         )}
-                        <div className="linkedin-actions">
-                          <span>
-                            <ThumbsUp size={15} />
-                            Like
-                          </span>
-                          <span>
-                            <MessageCircle size={15} />
-                            Comment
-                          </span>
-                          <span>
-                            <RefreshCw size={14} />
-                            Repost
-                          </span>
-                          <span>
-                            <Send size={14} />
-                            Send
-                          </span>
-                        </div>
+                        {post.platform !== "newsletter" && (
+                          <div className="linkedin-actions">
+                            <span>
+                              <ThumbsUp size={15} />
+                              Like
+                            </span>
+                            <span>
+                              <MessageCircle size={15} />
+                              Comment
+                            </span>
+                            <span>
+                              <RefreshCw size={14} />
+                              Repost
+                            </span>
+                            <span>
+                              <Send size={14} />
+                              Send
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="draft-footer">
                         <span>
@@ -1015,9 +1108,16 @@ export default function App() {
                             className="icon-button"
                             title="Download post text"
                             aria-label="Download post text"
-                            onClick={download}
+                            onClick={() => download()}
                           >
                             <Download size={16} />
+                          </button>
+                          <button
+                            className="text-button"
+                            title="Download Markdown"
+                            onClick={() => download("md")}
+                          >
+                            .md
                           </button>
                         </div>
                       </div>
@@ -1036,13 +1136,35 @@ export default function App() {
                         </div>
                         <div>
                           <Button
-                            onClick={() =>
-                              action(
-                                "approve",
-                                () =>
-                                  api(`/posts/${post.id}/approve`, "POST", {}),
-                                "Post approved and ready to schedule.",
+                            disabled={
+                              !!busy ||
+                              pending ||
+                              !post.content ||
+                              !["draft", "needs_review", "approved"].includes(
+                                post.status,
                               )
+                            }
+                            onClick={() => setDialog({ type: "edit", post })}
+                          >
+                            <PenLine size={14} /> Edit draft
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              post.status === "needs_review" ||
+                              (!!latestReview && !reviewPassed) ||
+                              post.review_stale ||
+                              post.image_stale
+                                ? setDialog({ type: "approve", post })
+                                : action(
+                                    "approve",
+                                    () =>
+                                      api(
+                                        `/posts/${post.id}/approve`,
+                                        "POST",
+                                        {},
+                                      ),
+                                    "Post approved and ready to schedule.",
+                                  )
                             }
                             disabled={
                               !!busy ||
@@ -1135,7 +1257,15 @@ export default function App() {
                     {studioSnapshot ? (
                       <div className="learning-callout">
                         <div>
-                          <Badge tone="green">Early signal</Badge>
+                          <Badge
+                            tone={
+                              studioSnapshot.status === "early_signal"
+                                ? "green"
+                                : "amber"
+                            }
+                          >
+                            {label(studioSnapshot.status || "early_signal")}
+                          </Badge>
                           <span className="small muted">
                             v{studioSnapshot.version}
                           </span>
@@ -1146,8 +1276,9 @@ export default function App() {
                             : "Still exploring opening styles"}
                         </strong>
                         <p>{studioSnapshot.explanation}</p>
-                        <button onClick={() => switchPage("learning")}>
-                          Explore the evidence <ArrowUpRight size={13} />
+                        <button onClick={() => inspectSnapshot(studioSnapshot)}>
+                          Explore this draft’s evidence{" "}
+                          <ArrowUpRight size={13} />
                         </button>
                       </div>
                     ) : (
@@ -1174,29 +1305,41 @@ export default function App() {
                     <div className="section-title">
                       <ClipboardCheck size={16} />
                       <h3>The editor’s desk</h3>
-                      {post?.reviews?.length ? (
-                        <Badge tone="green">Reviewed</Badge>
-                      ) : null}
+                      {latestReview && (
+                        <Badge tone={reviewPassed ? "green" : "amber"}>
+                          {editedAfterReview
+                            ? "Edited · review needed"
+                            : reviewPassed
+                              ? "Editor approved"
+                              : "Needs attention"}
+                        </Badge>
+                      )}
                     </div>
-                    {editorialReview?.requests?.length ? (
+                    {latestReview ? (
                       <>
                         <p className="muted small">
-                          Small changes. A stronger piece.
+                          {editedAfterReview
+                            ? "This human edit has not been reviewed by the editor. Earlier scores describe the previous version."
+                            : reviewPassed
+                              ? "The final review has no outstanding requests. You make the final publishing decision."
+                              : "These requests are from the latest review. Resolve them before approving the post."}
                         </p>
-                        <div className="editor-requests">
-                          {editorialReview.requests
-                            .slice(0, 3)
-                            .map((request, i) => (
+                        {!!outstandingRequests.length && (
+                          <div className="editor-requests">
+                            {outstandingRequests.map((request, i) => (
                               <div key={i}>
-                                <span className="request-number">0{i + 1}</span>
+                                <span className="request-number">
+                                  {String(i + 1).padStart(2, "0")}
+                                </span>
                                 <div>
                                   <strong>{request.issue}</strong>
                                   <p>{request.instruction}</p>
                                 </div>
                               </div>
                             ))}
-                        </div>
-                        {latestReview?.criteria?.length ? (
+                          </div>
+                        )}
+                        {!!latestReview.criteria?.length && (
                           <div className="review-scores">
                             {latestReview.criteria.map((c) => (
                               <div key={c.name} title={c.reason}>
@@ -1208,14 +1351,93 @@ export default function App() {
                               </div>
                             ))}
                           </div>
-                        ) : null}
-                        <button
-                          className="text-button"
-                          onClick={() => setTab("diff")}
-                        >
-                          See what changed
-                          <ArrowRight size={13} />
-                        </button>
+                        )}
+                        {post?.review_stale && (
+                          <div className="editor-recheck">
+                            <Button
+                              kind="full"
+                              disabled={!!busy || pending}
+                              onClick={() =>
+                                action(
+                                  "review",
+                                  () =>
+                                    api(`/posts/${post.id}/review`, "POST", {
+                                      mode,
+                                    }),
+                                  "Draft rechecked. Review the latest findings before approving.",
+                                )
+                              }
+                            >
+                              {busy === "review" ? (
+                                <LoaderCircle className="spin" size={14} />
+                              ) : (
+                                <ClipboardCheck size={14} />
+                              )}{" "}
+                              Recheck edited draft
+                            </Button>
+                            <span className="small muted">
+                              {mode === "live"
+                                ? "Uses a paid Mesh review request."
+                                : "Demo recheck is a fixture; a human approval is still required."}
+                            </span>
+                          </div>
+                        )}
+                        <div className="editor-links">
+                          <button
+                            className="text-button"
+                            onClick={() => setTab("diff")}
+                          >
+                            See what changed <ArrowRight size={13} />
+                          </button>
+                          <button
+                            className="text-button"
+                            disabled={
+                              pending ||
+                              ["published", "published_manually"].includes(
+                                post?.status || "",
+                              )
+                            }
+                            onClick={() =>
+                              post && setDialog({ type: "edit", post })
+                            }
+                          >
+                            Make a targeted edit <PenLine size={13} />
+                          </button>
+                        </div>
+                        <details className="review-history">
+                          <summary>
+                            All {post?.reviews?.length} editor reviews{" "}
+                            <ChevronDown size={13} />
+                          </summary>
+                          {post?.reviews?.map((review, index) => (
+                            <div className="review-history-item" key={index}>
+                              <strong>
+                                Review {index + 1} ·{" "}
+                                {index === post.reviews!.length - 1
+                                  ? "latest"
+                                  : "previous draft"}
+                              </strong>
+                              <span className="small muted">
+                                {review.approved && !review.requests?.length
+                                  ? "Editor approved this version"
+                                  : `${review.requests?.length || 0} requested changes`}
+                              </span>
+                              {review.requests?.map((request, i) => (
+                                <p key={i}>
+                                  <b>{request.issue}</b> — {request.instruction}
+                                </p>
+                              ))}
+                              {review.criteria?.map((criterion) => (
+                                <p className="small" key={criterion.name}>
+                                  <b>
+                                    {label(criterion.name)} {criterion.score}/5.
+                                  </b>{" "}
+                                  {criterion.reason}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                        </details>
                       </>
                     ) : (
                       <p className="rail-empty">
@@ -1262,38 +1484,175 @@ export default function App() {
                         Download visual
                       </a>
                     )}
-                    {(!post?.image_url ||
-                      (post.image_source === "demo" && mode === "live")) && (
-                      <Button
-                        onClick={() =>
-                          post &&
-                          action(
-                            "image",
-                            () =>
-                              api(`/posts/${post.id}/image`, "POST", { mode }),
-                            "Visual saved to your post.",
-                          )
-                        }
-                        disabled={
-                          !!busy ||
-                          !post?.content ||
-                          pending ||
-                          !["draft", "needs_review", "approved"].includes(
-                            post.status,
-                          )
-                        }
-                        kind="full"
-                      >
-                        {busy === "image" ? (
-                          <LoaderCircle size={14} className="spin" />
-                        ) : (
-                          <Sparkles size={14} />
-                        )}{" "}
-                        {post?.image_url
-                          ? "Generate through Mesh"
-                          : "Create matching visual"}
-                      </Button>
+                    {post?.pending_image_request && (
+                      <div className="visual-recovery" role="status">
+                        <strong>Visual request saved</strong>
+                        <p>
+                          {post.image_error?.message ||
+                            "This request did not finish. Your text and any previous image are preserved."}
+                        </p>
+                        <Button
+                          kind="full"
+                          disabled={
+                            !!busy ||
+                            pending ||
+                            !["draft", "needs_review", "approved"].includes(
+                              post.status,
+                            )
+                          }
+                          onClick={() =>
+                            action(
+                              "image-retry",
+                              () =>
+                                api(`/posts/${post.id}/image`, "POST", {
+                                  mode: post.pending_image_request!.mode,
+                                  feedback:
+                                    post.pending_image_request!.feedback,
+                                  regenerate: true,
+                                  new_attempt: false,
+                                }),
+                              "Saved visual request completed.",
+                            )
+                          }
+                        >
+                          {busy === "image-retry" ? (
+                            <LoaderCircle className="spin" size={14} />
+                          ) : (
+                            <RefreshCw size={14} />
+                          )}{" "}
+                          Retry saved visual
+                        </Button>
+                        <span>
+                          {post.pending_image_request.mode === "live"
+                            ? "Reuses a saved image response when available. Mesh may charge if generation did not complete."
+                            : "Demo retry has no API cost."}
+                        </span>
+                      </div>
                     )}
+                    {(post?.image_url || post?.pending_image_request) && (
+                      <div className="visual-review-actions">
+                        <Button
+                          kind="full"
+                          disabled={
+                            !!busy ||
+                            !["draft", "needs_review", "approved"].includes(
+                              post.status,
+                            )
+                          }
+                          onClick={() => setDialog({ type: "image", post })}
+                        >
+                          <RefreshCw size={14} /> Regenerate with feedback
+                        </Button>
+                        <span className="small muted">
+                          Current image stays available. Live regeneration uses
+                          a paid Mesh request.
+                        </span>
+                        {!!post.image_variants?.length && (
+                          <details className="image-history">
+                            <summary>
+                              Review {post.image_variants.length} saved visual
+                              {post.image_variants.length === 1 ? "" : "s"}{" "}
+                              <ChevronDown size={13} />
+                            </summary>
+                            <div className="image-variants">
+                              {post.image_variants.map((variant, index) => (
+                                <div key={variant.id}>
+                                  <a
+                                    href={variant.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <img
+                                      src={variant.url}
+                                      alt={`Visual version ${index + 1}`}
+                                    />
+                                  </a>
+                                  <span>Version {index + 1}</span>
+                                  {variant.feedback && (
+                                    <p>{variant.feedback}</p>
+                                  )}
+                                  <Button
+                                    kind="full"
+                                    disabled={
+                                      !!busy ||
+                                      (post.selected_image_variant_id
+                                        ? post.selected_image_variant_id ===
+                                          variant.id
+                                        : post.image_url === variant.url) ||
+                                      ![
+                                        "draft",
+                                        "needs_review",
+                                        "approved",
+                                      ].includes(post.status)
+                                    }
+                                    onClick={() =>
+                                      action(
+                                        "image-select",
+                                        () =>
+                                          api(
+                                            `/posts/${post.id}/image/select`,
+                                            "POST",
+                                            { variant_id: variant.id },
+                                          ),
+                                        "Visual selected. Other versions remain saved.",
+                                      )
+                                    }
+                                  >
+                                    {(
+                                      post.selected_image_variant_id
+                                        ? post.selected_image_variant_id ===
+                                          variant.id
+                                        : post.image_url === variant.url
+                                    ) ? (
+                                      <>
+                                        <Check size={13} /> Kept
+                                      </>
+                                    ) : (
+                                      "Keep this visual"
+                                    )}
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                    {!post?.pending_image_request &&
+                      (!post?.image_url ||
+                        (post.image_source === "demo" && mode === "live")) && (
+                        <Button
+                          onClick={() =>
+                            post &&
+                            action(
+                              "image",
+                              () =>
+                                api(`/posts/${post.id}/image`, "POST", {
+                                  mode,
+                                }),
+                              "Visual saved to your post.",
+                            )
+                          }
+                          disabled={
+                            !!busy ||
+                            !post?.content ||
+                            pending ||
+                            !["draft", "needs_review", "approved"].includes(
+                              post.status,
+                            )
+                          }
+                          kind="full"
+                        >
+                          {busy === "image" ? (
+                            <LoaderCircle size={14} className="spin" />
+                          ) : (
+                            <Sparkles size={14} />
+                          )}{" "}
+                          {post?.image_url
+                            ? "Generate through Mesh"
+                            : "Create matching visual"}
+                        </Button>
+                      )}
                   </section>
                   {post?.decisions?.length ? (
                     <section className="decision-section">
@@ -1314,7 +1673,23 @@ export default function App() {
                               <p>{d.reason}</p>
                               {!!d.evidence_ids?.length && (
                                 <small>
-                                  Evidence: {d.evidence_ids.join(", ")}
+                                  {studioSnapshot ? (
+                                    <button
+                                      className="text-button"
+                                      onClick={() =>
+                                        inspectSnapshot(studioSnapshot)
+                                      }
+                                    >
+                                      View {d.evidence_ids.length} linked
+                                      evidence item
+                                      {d.evidence_ids.length === 1
+                                        ? ""
+                                        : "s"}{" "}
+                                      <ArrowUpRight size={12} />
+                                    </button>
+                                  ) : (
+                                    `${d.evidence_ids.length} supporting item${d.evidence_ids.length === 1 ? "" : "s"} saved in the audit record`
+                                  )}
                                 </small>
                               )}
                             </div>
@@ -1566,7 +1941,7 @@ export default function App() {
                   <strong>Your content calendar, without the noise.</strong>
                   <p>
                     Scheduled posts become ready at their due time. Publish on
-                    LinkedIn, then mark them published here.
+                    your selected platform, then mark them published here.
                   </p>
                 </div>
                 <Badge>Manual publishing</Badge>
@@ -1620,8 +1995,13 @@ export default function App() {
                               </Badge>
                               {p.is_demo && <Badge tone="amber">Demo</Badge>}
                               <span>
-                                <Linkedin size={13} />
-                                {p.hook ? label(p.hook) : "LinkedIn"}
+                                {p.platform === "newsletter" ? (
+                                  <FileText size={13} />
+                                ) : (
+                                  <Linkedin size={13} />
+                                )}
+                                {label(p.platform || "linkedin")} ·{" "}
+                                {label(p.hook)}
                               </span>
                             </div>
                             <h3>{p.title || p.brief || "Untitled post"}</h3>
@@ -1731,9 +2111,7 @@ export default function App() {
                           <span className="small muted">
                             {date(p.published_at)}
                           </span>
-                          <Badge tone={p.feedback ? "green" : "neutral"}>
-                            {p.feedback ? "Recorded" : "Awaiting metrics"}
-                          </Badge>
+                          <FeedbackReminder post={p} />
                           <Button
                             kind="quiet"
                             onClick={() =>
@@ -1781,6 +2159,7 @@ export default function App() {
                         api(`/brands/${brand.id}/learn`, "POST", {
                           source,
                           window: windowValue,
+                          platform,
                         }),
                       "Learning snapshot saved. Your next post can use this evidence.",
                     )
@@ -1795,16 +2174,36 @@ export default function App() {
                 </Button>
               </div>
               <div className="learning-controls">
+                <div>
+                  <label htmlFor="learning-platform">Platform</label>
+                  <select
+                    id="learning-platform"
+                    value={platform}
+                    onChange={(event) => {
+                      setPlatform(event.target.value as Platform);
+                      setSnapshotId("");
+                    }}
+                  >
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="newsletter">Newsletter</option>
+                  </select>
+                </div>
                 <div className="segmented">
                   <button
                     className={source === "manual" ? "active" : ""}
-                    onClick={() => setSource("manual")}
+                    onClick={() => {
+                      setSource("manual");
+                      setSnapshotId("");
+                    }}
                   >
                     Your real metrics
                   </button>
                   <button
                     className={source === "simulated" ? "active" : ""}
-                    onClick={() => setSource("simulated")}
+                    onClick={() => {
+                      setSource("simulated");
+                      setSnapshotId("");
+                    }}
                   >
                     Demo feedback
                   </button>
@@ -1814,13 +2213,40 @@ export default function App() {
                   <select
                     id="window"
                     value={windowValue}
-                    onChange={(e) => setWindowValue(e.target.value)}
+                    onChange={(e) => {
+                      setWindowValue(e.target.value);
+                      setSnapshotId("");
+                    }}
                   >
                     <option value="24h">First 24 hours</option>
                     <option value="7d">First 7 days</option>
                   </select>
                 </div>
               </div>
+              {!!snapshots.length && (
+                <div className="snapshot-picker">
+                  <label htmlFor="snapshot-version">
+                    Evidence saved with a learning decision
+                  </label>
+                  <select
+                    id="snapshot-version"
+                    value={snapshot?.id || ""}
+                    onChange={(e) => setSnapshotId(e.target.value)}
+                  >
+                    {snapshots.map((item, i) => (
+                      <option key={item.id} value={item.id}>
+                        Snapshot v{item.version}
+                        {i === 0 ? " · latest" : " · historical"} ·{" "}
+                        {date(item.created_at)}
+                      </option>
+                    ))}
+                  </select>
+                  <span>
+                    Historical observations stay frozen when metrics are
+                    corrected.
+                  </span>
+                </div>
+              )}
               {source === "simulated" && (
                 <div className="demo-note">
                   <FlaskConical size={16} />
@@ -1839,7 +2265,13 @@ export default function App() {
                         Comments + reposts per 1,000 impressions
                       </p>
                     </div>
-                    <Badge tone="green">Early signal</Badge>
+                    <Badge
+                      tone={
+                        snapshot?.status === "early_signal" ? "green" : "amber"
+                      }
+                    >
+                      {label(snapshot?.status || "collecting_evidence")}
+                    </Badge>
                   </div>
                   {snapshot ? (
                     <>
@@ -1882,6 +2314,12 @@ export default function App() {
                                 {stat?.posts === 1 ? "" : "s"} ·{" "}
                                 {(stat?.impressions || 0).toLocaleString()}{" "}
                                 impressions
+                                {stat?.interval && (
+                                  <span className="interval-note">
+                                    90% descriptive range:{" "}
+                                    {intervalText(stat.interval)} / 1k
+                                  </span>
+                                )}
                               </small>
                             </div>
                           );
@@ -1890,8 +2328,10 @@ export default function App() {
                       <div className="chart-footnote">
                         <CircleHelp size={14} />
                         An observed association, not proof that a hook caused
-                        engagement. Once all three styles have feedback, every
-                        fourth selection explores another opening.
+                        engagement. A preference needs sufficient exposure,
+                        repeated posts, and a clear signal. Exploration
+                        continues while evidence is weak.{" "}
+                        {snapshot.uncertainty_note || ""}
                       </div>
                     </>
                   ) : (
@@ -1904,74 +2344,30 @@ export default function App() {
                     </Empty>
                   )}
                 </section>
-                <section className="policy-card">
-                  <div className="rail-kicker">
-                    <Sparkles size={14} /> WHY THE NEXT POST CHANGES
-                  </div>
-                  <h2>
-                    A feedback loop
-                    <br />
-                    you can follow.
-                  </h2>
-                  <div className="policy-step">
-                    <span className="policy-dot" />
-                    <div>
-                      <span className="eyebrow">BEFORE</span>
-                      <strong>
-                        {previousSnapshot?.preferred_hook
-                          ? `${label(previousSnapshot.preferred_hook)} opening`
-                          : "Explore the three opening styles"}
-                      </strong>
-                      <p>
-                        {previousSnapshot
-                          ? `Learning snapshot v${previousSnapshot.version}`
-                          : "With no comparable evidence, rotate through each approach."}
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowDown className="policy-arrow" size={17} />
-                  <div className="policy-step">
-                    <span className="policy-dot filled" />
-                    <div>
-                      <span className="eyebrow">WHAT YOUR AUDIENCE SAID</span>
-                      <strong>
-                        {snapshot
-                          ? `${snapshot.evidence_ids.length} feedback observation${snapshot.evidence_ids.length === 1 ? "" : "s"}`
-                          : "Waiting for the first signal"}
-                      </strong>
-                      <p>
-                        {snapshot?.explanation ||
-                          "Feedback stays linked to the post that earned it."}
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowDown className="policy-arrow" size={17} />
-                  <div className="policy-step">
-                    <span className="policy-dot filled" />
-                    <div>
-                      <span className="eyebrow">NEXT TIME</span>
-                      <strong>
-                        {snapshot?.preferred_hook
-                          ? `Prefer ${label(snapshot.preferred_hook).toLowerCase()} hooks`
-                          : "Let the evidence inform your next draft"}
-                      </strong>
-                      <p>
-                        Your brand voice stays constant. Your opening strategy
-                        adapts.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setUseLearning(true);
-                      switchPage("studio");
-                    }}
-                  >
-                    Put this learning to work
-                    <ArrowUpRight size={15} />
-                  </button>
-                </section>
+                <LearningChain
+                  snapshot={snapshot}
+                  previousSnapshot={previousSnapshot}
+                  posts={posts}
+                  runs={data.runs}
+                  onOpenPost={(id) => {
+                    setSelectedId(id);
+                    switchPage("studio");
+                  }}
+                  onCreate={() => {
+                    setUseLearning(true);
+                    switchPage("studio");
+                  }}
+                />
               </div>
+              {snapshot && (
+                <EvidencePanel
+                  snapshot={snapshot}
+                  onOpenPost={(id) => {
+                    setSelectedId(id);
+                    switchPage("studio");
+                  }}
+                />
+              )}
               <section className="card feedback-section">
                 <div className="section-heading">
                   <div>
@@ -2012,6 +2408,16 @@ export default function App() {
                               · {p.feedback?.window || "No observation"}
                             </span>
                           </span>
+                          {p.feedback &&
+                            p.feedback.source === "manual" &&
+                            p.feedback.timing_status !== "window_matched" && (
+                              <span className="timing-warning">
+                                {p.feedback.timing_status === "out_of_window"
+                                  ? "Outside the measurement window"
+                                  : "Measurement time unverified"}{" "}
+                                · excluded from learning
+                              </span>
+                            )}
                         </div>
                         <span>
                           {p.feedback?.impressions?.toLocaleString() ?? "—"}
@@ -2116,20 +2522,32 @@ export default function App() {
           title={
             dialog.type === "brand"
               ? "Make room for your voice"
-              : dialog.type === "import"
-                ? "Bring a past post into the loop"
-                : dialog.type === "schedule"
-                  ? "Pick its moment"
-                  : "What did your audience say?"
+              : dialog.type === "approve"
+                ? "Make the final publishing decision"
+                : dialog.type === "edit"
+                  ? "Make the draft yours"
+                  : dialog.type === "image"
+                    ? "A better visual, with direction"
+                    : dialog.type === "import"
+                      ? "Bring a past post into the loop"
+                      : dialog.type === "schedule"
+                        ? "Pick its moment"
+                        : "What did your audience say?"
           }
           subtitle={
             dialog.type === "brand"
               ? "Your writing samples become the foundation for every draft."
-              : dialog.type === "import"
-                ? "Import a published LinkedIn post, then add its performance."
-                : dialog.type === "schedule"
-                  ? "Your post will be ready at this time. You publish it on LinkedIn."
-                  : "Enter the metrics from a consistent observation window."
+              : dialog.type === "approve"
+                ? "Review these remaining concerns before approving this version."
+                : dialog.type === "edit"
+                  ? "Save a new version with a reason. Approval is cleared so the new draft gets a fresh decision."
+                  : dialog.type === "image"
+                    ? "Describe what to improve. Every visual version remains available."
+                    : dialog.type === "import"
+                      ? "Import published content, then add its performance."
+                      : dialog.type === "schedule"
+                        ? "Your post will be ready at this time. You publish it on its selected platform."
+                        : "Enter the metrics from a consistent observation window."
           }
           onClose={() => !busy && setDialog(null)}
         >
@@ -2146,6 +2564,54 @@ export default function App() {
                     setDialog(null);
                   },
                   "Brand created. Extract your voice profile to start creating.",
+                )
+              }
+            />
+          ) : dialog.type === "approve" ? (
+            <ApprovalForm
+              post={dialog.post}
+              busy={!!busy}
+              onSubmit={() =>
+                action(
+                  "approve",
+                  async () => {
+                    await api(`/posts/${dialog.post.id}/approve`, "POST", {
+                      acknowledge_unresolved: true,
+                    });
+                    setDialog(null);
+                  },
+                  "Post approved with your recorded review decision.",
+                )
+              }
+            />
+          ) : dialog.type === "edit" ? (
+            <EditForm
+              post={dialog.post}
+              busy={!!busy}
+              onSubmit={(body) =>
+                action(
+                  "edit",
+                  async () => {
+                    await api(`/posts/${dialog.post.id}/edit`, "POST", body);
+                    setDialog(null);
+                    setTab("revised");
+                  },
+                  "New draft version saved. Review it before approving.",
+                )
+              }
+            />
+          ) : dialog.type === "image" ? (
+            <ImageForm
+              mode={mode}
+              busy={!!busy}
+              onSubmit={(body) =>
+                action(
+                  "image",
+                  async () => {
+                    await api(`/posts/${dialog.post.id}/image`, "POST", body);
+                    setDialog(null);
+                  },
+                  "New visual saved. You can keep any previous version.",
                 )
               }
             />
@@ -2204,6 +2670,574 @@ export default function App() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function opening(text?: string) {
+  const first =
+    (text || "")
+      .trim()
+      .split(/\n/)
+      .find((line) => line.trim()) || "";
+  return first.length > 320 ? `${first.slice(0, 317)}…` : first;
+}
+function intervalText(
+  interval: [number, number] | { low: number; high: number },
+) {
+  const [low, high] = Array.isArray(interval)
+    ? interval
+    : [interval.low, interval.high];
+  return `${Number(low).toFixed(1)}–${Number(high).toFixed(1)}`;
+}
+function FeedbackReminder({ post }: { post: Post }) {
+  const observations =
+    post.feedback_observations || (post.feedback ? [post.feedback] : []);
+  const real = observations.filter(
+    (item) => item.source === (post.is_demo ? "simulated" : "manual"),
+  );
+  const published = post.published_at
+    ? new Date(post.published_at).getTime()
+    : NaN;
+  const age = Date.now() - published;
+  const missing = ["24h", "7d"].filter(
+    (window) =>
+      !real.some(
+        (item) =>
+          item.window === window &&
+          (item.source === "simulated" ||
+            item.timing_status === "window_matched"),
+      ),
+  );
+  const due = missing.find(
+    (window) => age >= (window === "24h" ? 24 : 168) * 3600000,
+  );
+  if (!missing.length) return <Badge tone="green">24h + 7d recorded</Badge>;
+  return (
+    <div className="feedback-reminder">
+      <Badge tone={due ? "amber" : "neutral"}>
+        {due
+          ? `${due} metrics due`
+          : real.length
+            ? "Partly recorded"
+            : "Awaiting metrics"}
+      </Badge>
+      {Number.isFinite(published) && (
+        <span>
+          {due
+            ? "Record the matching analytics window"
+            : `${missing[0]} check · ${date(new Date(published + (missing[0] === "24h" ? 24 : 168) * 3600000).toISOString())}`}
+        </span>
+      )}
+    </div>
+  );
+}
+function generatedOpening(post: Post) {
+  const generated = [...(post.versions || [])]
+    .reverse()
+    .find((version) => !["manual_edit", "human_edit"].includes(version.kind));
+  return opening(generated?.content || post.content);
+}
+function LearningChain({
+  snapshot,
+  previousSnapshot,
+  posts,
+  runs,
+  onOpenPost,
+  onCreate,
+}: {
+  snapshot?: Snapshot;
+  previousSnapshot?: Snapshot;
+  posts: Post[];
+  runs: { post_id: string; strategy_reason?: string }[];
+  onOpenPost: (id: string) => void;
+  onCreate: () => void;
+}) {
+  const evidence = snapshot?.evidence || [];
+  const prior = evidence.find((item) => item.opening || item.content);
+  const next = posts
+    .filter(
+      (item) =>
+        item.learning_snapshot_id === snapshot?.id && item.content && snapshot,
+    )
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  const strategyReason = runs.find((run) => run.post_id === next?.id)?.strategy_reason;
+  const explores = next && snapshot?.preferred_hook &&
+    next.hook !== snapshot.preferred_hook &&
+    strategyReason?.toLowerCase().startsWith("exploration:");
+  return (
+    <section className="policy-card">
+      <div className="rail-kicker">
+        <Sparkles size={14} /> WHY THE NEXT POST CHANGES
+      </div>
+      <h2>
+        A feedback loop
+        <br />
+        you can follow.
+      </h2>
+      <div className="policy-step">
+        <span className="policy-dot" />
+        <div>
+          <span className="eyebrow">1 · AN ACTUAL EARLIER OPENING</span>
+          {prior ? (
+            <>
+              <blockquote>
+                “{prior.opening || opening(prior.content)}”
+              </blockquote>
+              <p>
+                {prior.post_title || "Earlier post"} · {label(prior.hook)}
+              </p>
+            </>
+          ) : (
+            <>
+              <strong>
+                {previousSnapshot?.preferred_hook
+                  ? `${label(previousSnapshot.preferred_hook)} opening`
+                  : "Every draft starts with a hypothesis"}
+              </strong>
+              <p>
+                {snapshot
+                  ? snapshot.evidence
+                    ? "No eligible observations were available when this snapshot was saved."
+                    : "This older snapshot did not embed immutable post excerpts."
+                  : "Publish a post and record comparable feedback to begin."}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="policy-step">
+        <span className="policy-dot filled" />
+        <div>
+          <span className="eyebrow">
+            2 · FEEDBACK → POLICY v{snapshot?.version || "—"}
+          </span>
+          <strong>
+            {snapshot
+              ? `${snapshot.evidence_ids.length} ${snapshot.evidence ? "frozen" : "saved"} feedback observation${snapshot.evidence_ids.length === 1 ? "" : "s"}`
+              : "Waiting for the first signal"}
+          </strong>
+          <p>
+            {snapshot?.explanation ||
+              "Metrics are linked to an exact revision, source, and observation window."}
+          </p>
+          {snapshot?.preferred_hook && (
+            <Badge tone="green">
+              Prefer {label(snapshot.preferred_hook).toLowerCase()}
+            </Badge>
+          )}
+        </div>
+      </div>
+      <div className="policy-step">
+        <span className="policy-dot filled" />
+        <div>
+          <span className="eyebrow">3 · THE NEXT GENERATED OPENING</span>
+          {next ? (
+            <>
+              <blockquote>“{generatedOpening(next)}”</blockquote>
+              <p>
+                {label(next.hook)} · generated with snapshot v
+                {snapshot?.version}
+              </p>
+              {explores && (
+                <>
+                  <Badge tone="amber">Exploration draft</Badge>
+                  <p>{strategyReason}</p>
+                </>
+              )}
+              <button
+                className="inline-policy-link"
+                onClick={() => onOpenPost(next.id)}
+              >
+                Inspect the draft and decision <ArrowUpRight size={13} />
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>No draft has used this snapshot yet</strong>
+              <p>
+                Generate with audience learnings enabled to see the resulting
+                opening here.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+      {next && prior && (
+        <details className="opening-comparison">
+          <summary>
+            Compare the actual openings <ChevronDown size={13} />
+          </summary>
+          <div className="diff-legend">
+            <span>
+              <i className="remove-swatch" /> Earlier opening
+            </span>
+            <span>
+              <i className="add-swatch" /> Next draft
+            </span>
+          </div>
+          <Diff
+            before={prior.opening || opening(prior.content)}
+            after={generatedOpening(next)}
+          />
+          <p>
+            Different briefs may contribute to this change. This comparison is
+            evidence of behavior, not a causal test.
+          </p>
+        </details>
+      )}
+      <button onClick={onCreate}>
+        Put the latest learning to work <ArrowUpRight size={15} />
+      </button>
+    </section>
+  );
+}
+function EvidencePanel({
+  snapshot,
+  onOpenPost,
+}: {
+  snapshot: Snapshot;
+  onOpenPost: (id: string) => void;
+}) {
+  const observations = snapshot.evidence || [];
+  return (
+    <section className="card frozen-evidence">
+      <div className="section-heading">
+        <div>
+          <h2>The evidence at decision time</h2>
+          <p className="muted small">
+            Snapshot v{snapshot.version} · {label(snapshot.source)} ·{" "}
+            {snapshot.window} · {date(snapshot.created_at)}
+          </p>
+        </div>
+        <Badge>
+          {observations.length || snapshot.evidence_ids.length} saved
+          observations
+        </Badge>
+      </div>
+      {!!snapshot.thresholds && (
+        <details className="thresholds">
+          <summary>
+            When can an opening become preferred? <ChevronDown size={13} />
+          </summary>
+          <div className="threshold-grid">
+            {Object.entries(snapshot.thresholds).map(([key, value]) => (
+              <div key={key}>
+                <span>{label(key)}</span>
+                <strong>
+                  {String(value)}
+                  {["min_posts", "min_impressions"].includes(key)
+                    ? " per opening"
+                    : ""}
+                </strong>
+              </div>
+            ))}
+          </div>
+          <p className="small muted">
+            The policy keeps exploring when volume is too low or the observed
+            difference is uncertain.
+          </p>
+        </details>
+      )}
+      {!!snapshot.excluded?.length && (
+        <details className="excluded-evidence">
+          <summary>
+            {snapshot.excluded.length} observation
+            {snapshot.excluded.length === 1 ? "" : "s"} excluded from this
+            decision <ChevronDown size={13} />
+          </summary>
+          {snapshot.excluded.map((item, index) => (
+            <div key={item.id || index}>
+              <p>{item.reason}</p>
+              {item.post_id && (
+                <button
+                  className="text-button"
+                  onClick={() => onOpenPost(item.post_id!)}
+                >
+                  Inspect source post <ArrowUpRight size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </details>
+      )}
+      {observations.length ? (
+        <div className="frozen-evidence-list">
+          {observations.map((item: Evidence, index) => {
+            const metrics = item.metrics || item;
+            return (
+              <details
+                key={item.id || item.observation_id || index}
+                className="evidence-observation"
+              >
+                <summary>
+                  <span>
+                    <strong>
+                      {item.post_title || `Published post ${index + 1}`}
+                    </strong>
+                    <small>
+                      {label(item.hook)} ·{" "}
+                      {Number(metrics.impressions || 0).toLocaleString()}{" "}
+                      impressions ·{" "}
+                      {Number(metrics.comments || 0) +
+                        Number(metrics.reposts || 0)}{" "}
+                      comments + reposts
+                    </small>
+                  </span>
+                  <Badge>Revision {item.revision || 1}</Badge>
+                  <ChevronDown size={14} />
+                </summary>
+                <blockquote>
+                  “
+                  {item.opening ||
+                    opening(item.content) ||
+                    "Opening was not captured in this legacy observation."}
+                  ”
+                </blockquote>
+                <div className="evidence-metrics">
+                  <span>
+                    <b>{metrics.impressions?.toLocaleString() ?? "—"}</b>{" "}
+                    Impressions
+                  </span>
+                  <span>
+                    <b>{metrics.comments ?? "—"}</b> Comments
+                  </span>
+                  <span>
+                    <b>{metrics.reposts ?? "—"}</b> Reposts
+                  </span>
+                </div>
+                <p className="small muted">
+                  {label(item.source || snapshot.source)} ·{" "}
+                  {item.window || snapshot.window} ·{" "}
+                  {item.observed_at
+                    ? `Measured ${date(item.observed_at)}`
+                    : "Measurement time unavailable"}
+                  {item.window_start
+                    ? ` · Window ${date(item.window_start)}–${date(item.window_end)}`
+                    : ""}
+                </p>
+                <div className="evidence-links">
+                  {item.post_id && (
+                    <button
+                      className="text-button"
+                      onClick={() => onOpenPost(item.post_id!)}
+                    >
+                      Open source post <ArrowUpRight size={13} />
+                    </button>
+                  )}
+                  {item.source_url?.startsWith("https://") && (
+                    <a
+                      className="text-button"
+                      target="_blank"
+                      rel="noreferrer"
+                      href={item.source_url}
+                    >
+                      View metric source <ArrowUpRight size={13} />
+                    </a>
+                  )}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="rail-empty">
+          {snapshot.evidence
+            ? "No comparable feedback was eligible for this decision. Record consistent observation windows, then update learnings to save a new snapshot."
+            : "This historical snapshot predates immutable observations. Its saved aggregate remains visible; update learnings to capture the current evidence as a new snapshot."}
+        </p>
+      )}
+    </section>
+  );
+}
+function EditForm({
+  post,
+  busy,
+  onSubmit,
+}: {
+  post: Post;
+  busy: boolean;
+  onSubmit: (body: Record<string, unknown>) => Promise<unknown>;
+}) {
+  const [content, setContent] = useState(post.content);
+  const [title, setTitle] = useState(post.title);
+  return (
+    <form
+      className="form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        onSubmit({
+          title: form.get("title"),
+          content,
+          reason: form.get("reason"),
+        });
+      }}
+    >
+      {!!post.reviews?.at(-1)?.requests?.length && (
+        <div className="edit-brief">
+          <strong>Latest editorial requests</strong>
+          {post.reviews.at(-1)!.requests!.map((request, i) => (
+            <p key={i}>{request.instruction}</p>
+          ))}
+        </div>
+      )}
+      <label>
+        Title
+        <input
+          name="title"
+          required
+          maxLength={200}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+      </label>
+      <label>
+        Your revised content
+        <textarea
+          autoFocus
+          name="content"
+          required
+          minLength={20}
+          maxLength={post.platform === "newsletter" ? 12000 : 3000}
+          rows={12}
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+        />
+        <small>
+          {content.split(/\s+/).filter(Boolean).length} words · {content.length}{" "}
+          characters
+        </small>
+      </label>
+      <label>
+        What did you change, and why?
+        <textarea
+          name="reason"
+          required
+          minLength={5}
+          maxLength={1200}
+          rows={2}
+          placeholder="For example: removed an unsupported claim and made the takeaway specific."
+        />
+      </label>
+      <Submit
+        busy={busy}
+        disabled={
+          content.trim() === post.content.trim() &&
+          title.trim() === post.title.trim()
+        }
+      >
+        Save a new draft version
+      </Submit>
+    </form>
+  );
+}
+function ApprovalForm({
+  post,
+  busy,
+  onSubmit,
+}: {
+  post: Post;
+  busy: boolean;
+  onSubmit: () => Promise<unknown>;
+}) {
+  const [acknowledged, setAcknowledged] = useState(false);
+  return (
+    <form
+      className="form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (acknowledged) onSubmit();
+      }}
+    >
+      <div className="edit-brief">
+        {post.review_stale && (
+          <p>This edited version has not been re-reviewed by the editor.</p>
+        )}
+        {post.image_stale && (
+          <p>
+            The saved visual was created for an earlier version. Confirm that it
+            still fits.
+          </p>
+        )}
+        {post.reviews?.at(-1)?.requests?.map((request, i) => (
+          <p key={i}>
+            <b>{request.issue}:</b> {request.instruction}
+          </p>
+        ))}
+        {!post.review_stale &&
+          !post.reviews?.at(-1)?.requests?.length &&
+          post.status === "needs_review" && (
+            <p>
+              The editor did not approve the final draft. Review the text before
+              proceeding.
+            </p>
+          )}
+      </div>
+      <label className="approval-checkbox">
+        <input
+          type="checkbox"
+          required
+          checked={acknowledged}
+          onChange={(event) => setAcknowledged(event.target.checked)}
+        />
+        <span>
+          I reviewed this version and any attached visual, and accept the
+          remaining editorial concerns.
+        </span>
+      </label>
+      <Submit busy={busy} disabled={!acknowledged}>
+        Approve with my review decision
+      </Submit>
+    </form>
+  );
+}
+function ImageForm({
+  mode,
+  busy,
+  onSubmit,
+}: {
+  mode: Mode;
+  busy: boolean;
+  onSubmit: (body: Record<string, unknown>) => Promise<unknown>;
+}) {
+  return (
+    <form
+      className="form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        onSubmit({
+          mode,
+          regenerate: true,
+          new_attempt: true,
+          feedback: form.get("feedback"),
+        });
+      }}
+    >
+      <label>
+        Feedback for the visual agent
+        <textarea
+          autoFocus
+          name="feedback"
+          rows={4}
+          required
+          minLength={3}
+          maxLength={1200}
+          placeholder="For example: simplify the composition, remove lettering, and emphasize the feedback loop."
+        />
+      </label>
+      <div className="form-info">
+        <ImagePlus size={16} />
+        {mode === "live"
+          ? "Generates a new image through Mesh and charges your configured API account. The current image remains saved."
+          : "Demo mode creates a fixture visual without a paid request."}
+      </div>
+      <Submit busy={busy}>
+        {mode === "live"
+          ? "Generate new visual · paid Mesh request"
+          : "Generate demo visual"}
+      </Submit>
+    </form>
   );
 }
 
@@ -2270,6 +3304,62 @@ function EvaluationReport({
         : `${summary.wins} / ${summary.ties} / ${summary.losses}`,
     ],
   ];
+  if (typeof summary.first_pass_completed_pairs === "number") {
+    metrics.unshift([
+      "First-pass completed cases",
+      `${summary.first_pass_completed_pairs} / ${totalPairs}`,
+    ]);
+    metrics.push([
+      "First-pass generation completed",
+      `${summary.first_pass_generation_completed_pairs ?? "—"} / ${totalPairs}`,
+    ]);
+    metrics.push(["Recovered pairs", summary.recovered_pairs ?? 0]);
+  }
+  if (typeof summary.constraint_scored_pairs === "number") {
+    metrics.push([
+      "Constraint failures · first → refined",
+      `${summary.constraint_failures_before ?? "—"} → ${summary.constraint_failures_after ?? "—"}`,
+    ]);
+  }
+  const configuration = evaluation.config as
+    | {
+        judge_model?: string;
+        independent_judge_model?: boolean;
+        suite?: string;
+        learn_voices?: boolean;
+      }
+    | undefined;
+  const dimensions = summary.by_dimension as
+    | Record<
+        string,
+        {
+          before?: number;
+          after?: number;
+          paired_change?: {
+            n?: number;
+            mean_delta?: number;
+            interval_95?: [number, number];
+            small_n?: boolean;
+          };
+        }
+      >
+    | undefined;
+  const paired = summary.paired_change as
+    | {
+        n?: number;
+        mean_delta?: number;
+        interval_95?: [number, number];
+        small_n?: boolean;
+      }
+    | undefined;
+  const voiceChecks = Array.isArray(evaluation.voice_checks)
+    ? (evaluation.voice_checks as {
+        condition: string;
+        scored: boolean;
+        target_identified?: boolean;
+        error?: string;
+      }[])
+    : [];
   const checks = Array.isArray(evaluation.learning_checks)
     ? (evaluation.learning_checks as {
         id: string;
@@ -2295,6 +3385,27 @@ function EvaluationReport({
           </span>
         )}
       </div>
+      {configuration?.judge_model && (
+        <div className="evaluation-method">
+          <Badge
+            tone={configuration.independent_judge_model ? "green" : "amber"}
+          >
+            {configuration.independent_judge_model
+              ? "Separately configured judge"
+              : "Shared writing / judge model"}
+          </Badge>
+          <span>
+            {configuration.judge_model}
+            {configuration.suite
+              ? ` · ${label(configuration.suite)} suite`
+              : ""}
+          </span>
+          <p>
+            Different models can still share biases. Scores remain subjective
+            and are not audience performance measurements.
+          </p>
+        </div>
+      )}
       {initialSummary && (
         <div className="evaluation-recovery" role="status">
           <History size={15} />
@@ -2349,6 +3460,86 @@ function EvaluationReport({
           </div>
         ))}
       </div>
+      {paired?.interval_95 && (
+        <div className="evaluation-uncertainty">
+          <CircleHelp size={15} />
+          <span>
+            Paired mean-change 95% bootstrap interval:{" "}
+            <b>
+              {paired.interval_95[0].toFixed(2)} to{" "}
+              {paired.interval_95[1].toFixed(2)}
+            </b>{" "}
+            across {paired.n ?? scoredPairs} scored pairs.
+            {paired.small_n
+              ? " Small sample: treat the estimate as exploratory."
+              : ""}{" "}
+            This interval describes the benchmark, not audience uplift.
+          </span>
+        </div>
+      )}
+      {dimensions && (
+        <details className="dimension-details">
+          <summary>
+            Inspect scores by quality dimension <ChevronDown size={14} />
+          </summary>
+          <div className="dimension-table">
+            <div className="dimension-header">
+              <span>Dimension</span>
+              <span>First</span>
+              <span>Refined</span>
+              <span>Mean change</span>
+            </div>
+            {Object.entries(dimensions).map(([name, value]) => (
+              <div key={name}>
+                <strong>{label(name)}</strong>
+                <span>{value.before?.toFixed(2) ?? "—"}</span>
+                <span>{value.after?.toFixed(2) ?? "—"}</span>
+                <span>
+                  {(
+                    value.paired_change?.mean_delta ??
+                    (typeof value.before === "number" &&
+                    typeof value.after === "number"
+                      ? value.after - value.before
+                      : undefined)
+                  )?.toFixed(2) ?? "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+      {!!voiceChecks.length && (
+        <details className="dimension-details">
+          <summary>
+            Voice fidelity controls <ChevronDown size={14} />
+          </summary>
+          <p className="small muted">
+            Can a blinded judge identify the intended voice? Swapped and neutral
+            profiles test whether the profile makes a difference.
+          </p>
+          <div className="voice-controls">
+            {["correct", "swapped", "neutral"].map((condition) => {
+              const group = voiceChecks.filter(
+                (item) => item.condition === condition,
+              );
+              const scored = group.filter((item) => item.scored);
+              if (!group.length) return null;
+              return (
+                <div key={condition}>
+                  <strong>{label(condition)} profile</strong>
+                  <span>
+                    {scored.filter((item) => item.target_identified).length} /{" "}
+                    {scored.length} identified
+                  </span>
+                  <small>
+                    {group.length - scored.length} unscored or failed
+                  </small>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
       {checks.length > 0 && (
         <div className="evaluation-checks">
           {checks.map((check) => (
@@ -2611,6 +3802,7 @@ function ImportForm({
             String(values.get("published_at")),
           ).toISOString(),
           source: "manual",
+          platform: values.get("platform"),
         });
       }}
     >
@@ -2623,6 +3815,13 @@ function ImportForm({
           placeholder="A short name to find this post later"
           maxLength={200}
         />
+      </label>
+      <label>
+        Platform
+        <select name="platform">
+          <option value="linkedin">LinkedIn</option>
+          <option value="newsletter">Newsletter</option>
+        </select>
       </label>
       <label>
         Published content
@@ -2749,6 +3948,25 @@ function FeedbackForm({
           reposts: Number(form.get("reposts")),
           source: feedbackSource,
           window: feedbackWindow,
+          observed_at: new Date(String(form.get("observed_at"))).toISOString(),
+          ...(form.get("window_start")
+            ? {
+                window_start: new Date(
+                  String(form.get("window_start")),
+                ).toISOString(),
+              }
+            : {}),
+          ...(form.get("window_end")
+            ? {
+                window_end: new Date(
+                  String(form.get("window_end")),
+                ).toISOString(),
+              }
+            : {}),
+          ...(form.get("source_url")
+            ? { source_url: String(form.get("source_url")) }
+            : {}),
+          ...(form.get("notes") ? { notes: String(form.get("notes")) } : {}),
         });
       }}
     >
@@ -2779,6 +3997,8 @@ function FeedbackForm({
           >
             <option value="24h">First 24 hours</option>
             <option value="7d">First 7 days</option>
+            <option value="cumulative">Cumulative / lifetime</option>
+            <option value="unknown">Window unknown</option>
           </select>
         </label>
       </div>
@@ -2801,14 +4021,97 @@ function FeedbackForm({
           ),
         )}
       </div>
+      <div
+        key={`timing:${feedbackSource}:${feedbackWindow}`}
+        className="feedback-timing"
+      >
+        <label>
+          When were these metrics measured?
+          <input
+            type="datetime-local"
+            name="observed_at"
+            required
+            defaultValue={localDate(
+              existing?.observed_at
+                ? new Date(existing.observed_at)
+                : new Date(),
+            )}
+          />
+          <small>
+            Use the actual measurement time. Late lifetime totals cannot be
+            relabeled as first-24-hour metrics.
+          </small>
+        </label>
+        <details className="timing-details">
+          <summary>
+            Analytics window and source <ChevronDown size={13} />
+          </summary>
+          <p className="small muted">
+            Optional: enter both boundaries if the analytics report covers the
+            exact first 24 hours or 7 days, even when you read it later. Leave
+            blank for metrics captured at the due time.
+          </p>
+          <div className="form-row">
+            <label>
+              Window starts
+              <input
+                type="datetime-local"
+                name="window_start"
+                defaultValue={
+                  existing?.window_start
+                    ? localDate(new Date(existing.window_start))
+                    : ""
+                }
+              />
+            </label>
+            <label>
+              Window ends
+              <input
+                type="datetime-local"
+                name="window_end"
+                defaultValue={
+                  existing?.window_end
+                    ? localDate(new Date(existing.window_end))
+                    : ""
+                }
+              />
+            </label>
+          </div>
+          <label>
+            Source link
+            <input
+              type="url"
+              name="source_url"
+              defaultValue={existing?.source_url || ""}
+              placeholder="https://www.linkedin.com/…"
+            />
+          </label>
+          <label>
+            Measurement notes
+            <textarea
+              name="notes"
+              rows={2}
+              maxLength={1200}
+              defaultValue={existing?.notes || ""}
+              placeholder="Optional context, such as a saved analytics report."
+            />
+          </label>
+        </details>
+      </div>
       <div className="form-info">
         <TrendingUp size={16} />
         Learning uses comments + reposts per 1,000 impressions. Reactions are
         stored for context.{" "}
         {existing
-          ? "Saving updates this observation without double-counting it."
+          ? "Saving creates an immutable revision. Earlier learning decisions keep their original evidence."
           : ""}
       </div>
+      {["unknown", "cumulative"].includes(feedbackWindow) && (
+        <p className="form-warning">
+          Saved for your records and excluded from 24-hour and 7-day learning
+          comparisons.
+        </p>
+      )}
       <Submit busy={busy}>Save performance feedback</Submit>
     </form>
   );

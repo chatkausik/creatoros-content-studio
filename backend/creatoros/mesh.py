@@ -18,6 +18,7 @@ import socket
 import tempfile
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import TypeVar
 from urllib.parse import urlparse
 
@@ -37,6 +38,13 @@ class MeshError(RuntimeError):
     def __init__(self, message: str, diagnostics: dict | None = None):
         super().__init__(message)
         self.diagnostics = diagnostics
+
+
+class ImageDownloadError(MeshError):
+    """Transient fetch failure: keep the paid response for a download-only retry."""
+
+    def __init__(self, message: str):
+        super().__init__(message, {"image_retry_action": "retry_download"})
 
 
 def _write_json(path: Path, value: dict) -> None:
@@ -209,30 +217,59 @@ class MeshClient:
             return parsed
         raise MeshError("Structured generation did not complete.")
 
-    async def generate_image(self, prompt: str) -> dict:
+    async def generate_image(self, prompt: str, request_id: str | None = None) -> dict:
+        """Retry the same request without paying twice; a new id explicitly regenerates."""
         payload = {"model": self.image_model, "prompt": prompt, "n": 1, "quality": "low", "size": "1024x1024", "response_format": "b64_json"}
-        digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        cache_input = {**payload, **({"request_id": request_id} if request_id else {})}
+        digest = hashlib.sha256(json.dumps(cache_input, sort_keys=True).encode()).hexdigest()
         cache_path = self.cache_dir / f"image-{digest}.json"
         cached = _read_json(cache_path)
         if cached and (self.data_dir / "assets" / Path(cached.get("image_url", "")).name).is_file():
-            return cached
+            result = copy.deepcopy(cached)
+            usage = self._record_usage({"model": cached.get("actual_model")}, self.image_model, True)
+            usage.update({"stage": "image_generation", "request_id": request_id or digest})
+            result["usage"] = [usage]
+            result["cache_hit"] = True
+            return result
         # Save the completed response before normalization/download. A download
         # failure can be retried without a second paid generation request.
         raw_cache = self.cache_dir / f"image-response-{digest}.json"
+        invalid_marker = self.cache_dir / f"image-invalid-{digest}.json"
         response = _read_json(raw_cache)
+        raw_cache_hit = response is not None
+        elapsed = 0.0
         if response is None:
             started = time.monotonic()
-            response = await self._post("images/generations", payload, timeout=max(240.0, self.timeout))
-            self._record_usage(response, self.image_model, False, time.monotonic() - started)
+            response = await self._post("images/generations", payload, timeout=max(240.0, self.timeout), cache=not bool(request_id) and not invalid_marker.exists())
+            elapsed = time.monotonic() - started
             _write_json(raw_cache, response)
+        usage = self._record_usage(response if not raw_cache_hit else {"model": response.get("model")}, self.image_model, raw_cache_hit, elapsed)
+        usage.update({"stage": "image_generation", "request_id": request_id or digest, "download_retry": raw_cache_hit})
         try:
             entry = response["data"][0]
-        except (KeyError, IndexError, TypeError):
-            raise MeshError("Mesh returned no image. Retry the visual step.") from None
-        image_bytes = await normalize_image(entry)
+            if not isinstance(entry, dict):
+                raise MeshError("Mesh returned an invalid image entry.")
+            image_bytes = await normalize_image(entry)
+        except ImageDownloadError:
+            raise
+        except (KeyError, IndexError, TypeError, ValueError, MeshError) as error:
+            # Only usable or transiently unavailable image responses survive.
+            # Keeping invalid JSON/base64 here poisoned every later retry.
+            raw_cache.unlink(missing_ok=True)
+            _write_json(invalid_marker, {"invalidated_at": datetime.now(timezone.utc).isoformat()})
+            message = str(error) if isinstance(error, MeshError) else "Mesh returned no image."
+            raise MeshError(message + " The unusable response was discarded; regenerate the visual.", {"image_retry_action": "regenerate"}) from None
         asset_path = save_image(self.data_dir, image_bytes)
-        result = {"image_url": f"/assets/{asset_path.name}", "image_prompt": prompt, "model": self.image_model, "source": "mesh"}
+        result = {
+            "image_url": f"/assets/{asset_path.name}", "image_prompt": prompt,
+            "model": self.image_model, "requested_model": self.image_model,
+            "actual_model": usage["actual_model"], "source": "mesh",
+            "request_id": request_id or digest, "created_at": datetime.now(timezone.utc).isoformat(),
+            "content_sha256": hashlib.sha256(image_bytes).hexdigest(), "cache_hit": raw_cache_hit,
+            "usage": [copy.deepcopy(usage)],
+        }
         _write_json(cache_path, result)
+        invalid_marker.unlink(missing_ok=True)
         return result
 
 
@@ -258,7 +295,7 @@ async def normalize_image(entry: dict) -> bytes:
         try:
             addresses = socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
         except OSError:
-            raise MeshError("Could not resolve the generated image host. Retry the visual step.") from None
+            raise ImageDownloadError("Could not resolve the generated image host. Retry the saved visual download.") from None
         if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
             raise MeshError("Image download host must use a public IP address.")
         chunks = []
@@ -267,7 +304,9 @@ async def normalize_image(entry: dict) -> bytes:
             async with httpx.AsyncClient(timeout=60, follow_redirects=False, trust_env=False) as client:
                 async with client.stream("GET", url) as response:
                     if response.status_code != 200:
-                        raise MeshError("Image download failed. Retry the saved visual response.")
+                        if response.status_code in {400, 401, 403, 404, 410}:
+                            raise MeshError("The generated image URL is no longer available.")
+                        raise ImageDownloadError("Image download failed. Retry the saved visual response.")
                     content_length = response.headers.get("content-length", "")
                     if content_length.isdigit() and int(content_length) > MAX_IMAGE_BYTES:
                         raise MeshError("Generated image exceeds the 20 MB limit.")
@@ -277,7 +316,7 @@ async def normalize_image(entry: dict) -> bytes:
                             raise MeshError("Generated image exceeds the 20 MB limit.")
                         chunks.append(chunk)
         except httpx.HTTPError:
-            raise MeshError("Image download failed. Retry the saved visual response.") from None
+            raise ImageDownloadError("Image download failed. Retry the saved visual response.") from None
         result = b"".join(chunks)
     else:
         raise MeshError("Mesh returned neither image bytes nor a download URL.")
